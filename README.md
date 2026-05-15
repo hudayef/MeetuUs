@@ -1,11 +1,11 @@
-# 📊 Content Writer Monthly Report Dashboard (with Supabase)
+# 📊 Project Monthly Report Dashboard (with Supabase)
 
 A premium, modern SaaS-style dashboard built for Content Writers to generate, manage, and export their monthly performance reports.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Status](https://img.shields.io/badge/status-Production_Ready-success.svg)
 
-## ✨ Features
+## Features
 
 - **Supabase Authentication:** Secure email/password login and registration.
 - **Database online:** Reports are safely stored in a Postgres Database powered by Supabase.
@@ -16,7 +16,7 @@ A premium, modern SaaS-style dashboard built for Content Writers to generate, ma
 - **Print Mode:** Optimized CSS for printing directly to PDF or paper.
 - **Dark Mode:** Elegant dark theme with user preference memory.
 
-## 🚀 Setup & Installation (Supabase)
+## Setup & Installation (Supabase)
 
 To run this application, you must connect it to your own Supabase project.
 
@@ -40,7 +40,7 @@ To run this application, you must connect it to your own Supabase project.
 4. **Run the App:**
    - Open `index.html` in your modern web browser or use a local server like Live Server.
 
-## 👑 How to become an Admin
+## How to become an Admin
 
 By default, all new users who register are assigned the `writer` role.
 To make yourself an admin so you can access the Admin Dashboard:
@@ -51,7 +51,7 @@ To make yourself an admin so you can access the Admin Dashboard:
 5. Change it from `writer` to `admin` and save.
 6. Refresh the web app. You will now see the Admin Panel.
 
-## ☁️ Deployment (Vercel)
+## Deployment (Vercel)
 
 This application is fully optimized for static deployment on Vercel.
 
