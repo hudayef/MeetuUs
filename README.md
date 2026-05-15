@@ -1,4 +1,4 @@
-# 📊 Project Monthly Report Dashboard (with Supabase)
+# Project Monthly Report Dashboard
 
 A premium, modern SaaS-style dashboard built for Content Writers to generate, manage, and export their monthly performance reports.
 
