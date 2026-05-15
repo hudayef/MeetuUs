@@ -3,75 +3,132 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Laporan Bulanan Content Writer</title>
+    <title>Sistem Pelaporan Kinerja Bulanan</title>
+    <meta name="description" content="Portal pelaporan kinerja bulanan untuk seluruh divisi. Manajemen laporan, export dokumen, dan rekapitulasi data.">
     <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Phosphor Icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Supabase JS SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <!-- Stylesheet -->
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="app-container">
-        <!-- Sidebar Navigation -->
-        <aside class="sidebar">
-            <div class="sidebar-header">
-                <div class="logo">
-                    <i class="ph ph-files"></i>
-                    <span>CW Report</span>
+    <!-- Auth Overlay (Login/Register) -->
+    <div id="auth-overlay" class="auth-overlay">
+        <div class="auth-card glass-panel">
+            <div class="auth-header">
+                <div class="logo justify-center">
+                    <i class="ph ph-buildings" aria-hidden="true"></i>
+                    <span>Portal Pelaporan</span>
                 </div>
+                <p id="auth-subtitle">Login untuk mengakses dashboard Anda</p>
+            </div>
+
+            <form id="auth-form" onsubmit="app.handleAuth(event)">
+                <div class="form-group" id="group-fullname" style="display: none;">
+                    <label for="auth-fullname">Nama Lengkap</label>
+                    <input type="text" id="auth-fullname" placeholder="John Doe">
+                </div>
+                <div class="form-group">
+                    <label for="auth-email">Email</label>
+                    <input type="email" id="auth-email" required placeholder="email@perusahaan.com">
+                </div>
+                <div class="form-group">
+                    <label for="auth-password">Password</label>
+                    <input type="password" id="auth-password" required placeholder="Minimal 6 karakter">
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100 mt-2" id="btn-auth-submit">
+                    Login
+                </button>
+            </form>
+
+            <div class="auth-footer">
+                <p id="auth-toggle-text">Belum punya akun? <a href="#" onclick="app.toggleAuthMode()">Daftar di sini</a></p>
+            </div>
+        </div>
+    </div>
+
+    <div class="app-container" id="app-main-container" style="display: none;">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar" aria-label="Main Navigation">
+            <div class="sidebar-header">
+                <a href="#" class="logo" aria-label="Home">
+                    <i class="ph ph-buildings" aria-hidden="true"></i>
+                    <span>Portal Pelaporan</span>
+                </a>
             </div>
             <nav class="sidebar-nav">
                 <ul>
                     <li class="active" id="nav-dashboard">
-                        <a href="#" onclick="app.navigate('dashboard')">
-                            <i class="ph ph-squares-four"></i>
+                        <a href="#" onclick="app.navigate('dashboard')" aria-current="page">
+                            <i class="ph ph-squares-four" aria-hidden="true"></i>
                             <span>Dashboard</span>
                         </a>
                     </li>
                     <li id="nav-create">
                         <a href="#" onclick="app.navigate('form')">
-                            <i class="ph ph-plus-circle"></i>
+                            <i class="ph ph-plus-circle" aria-hidden="true"></i>
                             <span>Buat Laporan</span>
+                        </a>
+                    </li>
+                    <!-- Admin Only Menu -->
+                    <li id="nav-admin" style="display: none;">
+                        <a href="#" onclick="app.navigate('admin')">
+                            <i class="ph ph-shield-check" aria-hidden="true"></i>
+                            <span>Admin Panel</span>
                         </a>
                     </li>
                 </ul>
             </nav>
+            <div class="sidebar-user-info" id="sidebar-user-info">
+                <div class="user-avatar"><i class="ph ph-user"></i></div>
+                <div class="user-details">
+                    <span class="user-name" id="display-user-name">Loading...</span>
+                    <span class="user-role" id="display-user-role">writer</span>
+                </div>
+            </div>
             <div class="sidebar-footer">
-                <button class="theme-toggle" id="theme-toggle" onclick="app.toggleTheme()">
-                    <i class="ph ph-moon"></i>
+                <button class="theme-toggle mb-2" onclick="app.logout()" aria-label="Logout" style="color: var(--danger-color); border-color: var(--danger-light);">
+                    <i class="ph ph-sign-out" aria-hidden="true"></i>
+                    <span>Logout</span>
+                </button>
+                <button class="theme-toggle" id="theme-toggle" onclick="app.toggleTheme()" aria-label="Toggle Dark Mode">
+                    <i class="ph ph-moon" aria-hidden="true"></i>
                     <span>Dark Mode</span>
                 </button>
             </div>
         </aside>
 
         <!-- Main Content Area -->
-        <main class="main-content">
+        <main class="main-content" id="main-content">
             <!-- Header -->
             <header class="top-header">
                 <h1 id="page-title">Dashboard</h1>
                 <div class="header-actions">
-                    <button class="btn btn-primary" onclick="app.navigate('form')" id="btn-header-create">
-                        <i class="ph ph-plus"></i> Buat Laporan Baru
+                    <button class="btn btn-primary" onclick="app.navigate('form')" id="btn-header-create" aria-label="Buat Laporan Baru">
+                        <i class="ph ph-plus" aria-hidden="true"></i> Buat Laporan Baru
                     </button>
                 </div>
             </header>
 
             <!-- Dashboard View -->
-            <section id="view-dashboard" class="view-section active">
+            <section id="view-dashboard" class="view-section active" aria-labelledby="page-title">
                 <!-- Statistics -->
-                <div class="stats-grid">
+                <div class="stats-grid" aria-label="Statistik Laporan">
                     <div class="stat-card">
-                        <div class="stat-icon"><i class="ph ph-file-text"></i></div>
+                        <div class="stat-icon" aria-hidden="true"><i class="ph ph-file-text"></i></div>
                         <div class="stat-info">
                             <h3>Total Laporan</h3>
                             <p id="stat-total-reports">0</p>
                         </div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-icon"><i class="ph ph-calendar-check"></i></div>
+                        <div class="stat-icon" aria-hidden="true"><i class="ph ph-calendar-check"></i></div>
                         <div class="stat-info">
                             <h3>Laporan Terbaru</h3>
                             <p id="stat-latest-report">-</p>
@@ -80,13 +137,15 @@
                 </div>
 
                 <!-- Filters & Search -->
-                <div class="toolbar">
+                <div class="toolbar" aria-label="Filter dan Pencarian">
                     <div class="search-box">
-                        <i class="ph ph-magnifying-glass"></i>
-                        <input type="text" id="search-input" placeholder="Cari laporan..." oninput="app.filterReports()">
+                        <label for="search-input" class="sr-only" style="display:none;">Cari laporan</label>
+                        <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
+                        <input type="text" id="search-input" placeholder="Cari laporan..." oninput="app.filterReports()" aria-label="Cari laporan">
                     </div>
                     <div class="filter-box">
-                        <select id="filter-month" onchange="app.filterReports()">
+                        <label for="filter-month" class="sr-only" style="display:none;">Filter Bulan</label>
+                        <select id="filter-month" onchange="app.filterReports()" aria-label="Filter berdasarkan bulan">
                             <option value="">Semua Bulan</option>
                             <option value="01">Januari</option>
                             <option value="02">Februari</option>
@@ -105,10 +164,10 @@
                 </div>
 
                 <!-- Report List / Grid -->
-                <div class="report-list" id="report-list">
+                <div class="report-list" id="report-list" aria-live="polite">
                     <!-- Reports will be dynamically injected here -->
                     <div class="empty-state" id="empty-state">
-                        <i class="ph ph-folder-open"></i>
+                        <i class="ph ph-folder-open" aria-hidden="true"></i>
                         <h3>Belum Ada Laporan</h3>
                         <p>Mulai buat laporan bulanan pertama Anda.</p>
                         <button class="btn btn-primary mt-3" onclick="app.navigate('form')">Buat Laporan</button>
@@ -117,56 +176,57 @@
             </section>
 
             <!-- Form View -->
-            <section id="view-form" class="view-section" style="display: none;">
+            <section id="view-form" class="view-section" style="display: none;" aria-label="Form Laporan">
                 <form id="report-form" onsubmit="app.saveReport(event)">
                     <input type="hidden" id="report-id">
 
                     <!-- Section: Identitas -->
                     <div class="form-card">
-                        <h2><i class="ph ph-identification-card"></i> Identitas</h2>
+                        <h2><i class="ph ph-identification-card" aria-hidden="true"></i> Identitas</h2>
                         <div class="form-grid">
                             <div class="form-group">
                                 <label for="nama">Nama Lengkap</label>
-                                <input type="text" id="nama" required placeholder="Masukkan nama">
+                                <input type="text" id="nama" required placeholder="Masukkan nama" aria-required="true">
                             </div>
                             <div class="form-group">
-                                <label for="posisi">Posisi</label>
-                                <input type="text" id="posisi" required placeholder="e.g. Content Writer">
+                                <label for="posisi">Jabatan / Posisi</label>
+                                <input type="text" id="posisi" required placeholder="Contoh: Staff Utama" aria-required="true">
                             </div>
                             <div class="form-group">
-                                <label for="divisi">Divisi</label>
-                                <input type="text" id="divisi" required placeholder="e.g. Marketing">
+                                <label for="divisi">Divisi / Departemen</label>
+                                <input type="text" id="divisi" required placeholder="Contoh: Hubungan Masyarakat" aria-required="true">
                             </div>
                             <div class="form-group">
                                 <label for="periode">Periode Laporan</label>
-                                <input type="month" id="periode" required>
+                                <input type="month" id="periode" required aria-required="true">
                             </div>
                             <div class="form-group">
                                 <label for="atasan">Atasan Langsung</label>
-                                <input type="text" id="atasan" required placeholder="Nama Atasan">
+                                <input type="text" id="atasan" required placeholder="Nama Atasan" aria-required="true">
                             </div>
                         </div>
                     </div>
 
                     <!-- Section: Ringkasan Pekerjaan -->
                     <div class="form-card">
-                        <h2><i class="ph ph-article"></i> Ringkasan Pekerjaan</h2>
+                        <h2><i class="ph ph-article" aria-hidden="true"></i> Ringkasan Pekerjaan</h2>
                         <div class="form-group">
-                            <textarea id="ringkasan" rows="4" required placeholder="Tuliskan ringkasan singkat pekerjaan Anda bulan ini..."></textarea>
+                            <label for="ringkasan" class="sr-only" style="display:none;">Ringkasan Pekerjaan</label>
+                            <textarea id="ringkasan" rows="4" required placeholder="Tuliskan ringkasan singkat pekerjaan Anda bulan ini..." aria-required="true"></textarea>
                         </div>
                     </div>
 
                     <!-- Section: Target dan Pencapaian -->
                     <div class="form-card">
-                        <h2><i class="ph ph-target"></i> Target dan Pencapaian</h2>
+                        <h2><i class="ph ph-target" aria-hidden="true"></i> Target dan Pencapaian</h2>
                         <div class="table-responsive">
-                            <table class="dynamic-table" id="table-target">
+                            <table class="dynamic-table" id="table-target" aria-label="Tabel Target dan Pencapaian">
                                 <thead>
                                     <tr>
-                                        <th>Target</th>
-                                        <th>Pencapaian</th>
-                                        <th>Status</th>
-                                        <th class="action-col">Aksi</th>
+                                        <th scope="col">Target</th>
+                                        <th scope="col">Pencapaian</th>
+                                        <th scope="col">Status</th>
+                                        <th scope="col" class="action-col">Aksi</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -174,47 +234,48 @@
                                 </tbody>
                             </table>
                         </div>
-                        <button type="button" class="btn btn-outline mt-2" onclick="app.addTargetRow()">
-                            <i class="ph ph-plus"></i> Tambah Target
+                        <button type="button" class="btn btn-outline mt-2" onclick="app.addTargetRow()" aria-label="Tambah Target">
+                            <i class="ph ph-plus" aria-hidden="true"></i> Tambah Target
                         </button>
                     </div>
 
-                    <!-- Section: Detail Pekerjaan -->
+                    <!-- Section: Uraian Tugas -->
                     <div class="form-card">
-                        <h2><i class="ph ph-list-dashes"></i> Detail Pekerjaan</h2>
+                        <h2><i class="ph ph-list-dashes" aria-hidden="true"></i> Uraian Tugas & Kegiatan</h2>
                         <div class="form-group">
-                            <label for="detail_website">Content Website</label>
-                            <textarea id="detail_website" rows="3" placeholder="Detail artikel/halaman yang ditulis..."></textarea>
+                            <label for="tugas_utama">Pelaksanaan Tugas Utama</label>
+                            <textarea id="tugas_utama" rows="3" required placeholder="Jelaskan secara detail pelaksanaan tugas pokok Anda..."></textarea>
                         </div>
                         <div class="form-group">
-                            <label for="detail_socmed">Media Sosial</label>
-                            <textarea id="detail_socmed" rows="3" placeholder="Detail caption/konten sosmed..."></textarea>
+                            <label for="tugas_tambahan">Pelaksanaan Tugas Tambahan / Khusus</label>
+                            <textarea id="tugas_tambahan" rows="3" placeholder="Uraikan tugas tambahan jika ada..."></textarea>
                         </div>
                         <div class="form-group">
-                            <label for="detail_riset">Riset dan Analisis</label>
-                            <textarea id="detail_riset" rows="3" placeholder="Detail riset keyword/kompetitor..."></textarea>
+                            <label for="keterangan_lain">Keterangan / Laporan Tambahan</label>
+                            <textarea id="keterangan_lain" rows="3" placeholder="Catatan atau informasi tambahan lainnya..."></textarea>
                         </div>
                     </div>
 
                     <!-- Section: Pencapaian Utama -->
                     <div class="form-card">
-                        <h2><i class="ph ph-trophy"></i> Pencapaian Utama</h2>
+                        <h2><i class="ph ph-trophy" aria-hidden="true"></i> Pencapaian Utama</h2>
                         <div class="form-group">
-                            <textarea id="pencapaian_utama" rows="3" required placeholder="Sebutkan prestasi atau pencapaian terbesar bulan ini..."></textarea>
+                            <label for="pencapaian_utama" class="sr-only" style="display:none;">Pencapaian Utama</label>
+                            <textarea id="pencapaian_utama" rows="3" required placeholder="Sebutkan prestasi atau pencapaian terbesar bulan ini..." aria-required="true"></textarea>
                         </div>
                     </div>
 
                     <!-- Section: Kendala -->
                     <div class="form-card">
-                        <h2><i class="ph ph-warning-circle"></i> Kendala dan Solusi</h2>
+                        <h2><i class="ph ph-warning-circle" aria-hidden="true"></i> Kendala dan Solusi</h2>
                         <div class="table-responsive">
-                            <table class="dynamic-table" id="table-kendala">
+                            <table class="dynamic-table" id="table-kendala" aria-label="Tabel Kendala dan Solusi">
                                 <thead>
                                     <tr>
-                                        <th>Kendala</th>
-                                        <th>Dampak</th>
-                                        <th>Solusi</th>
-                                        <th class="action-col">Aksi</th>
+                                        <th scope="col">Kendala</th>
+                                        <th scope="col">Dampak</th>
+                                        <th scope="col">Solusi</th>
+                                        <th scope="col" class="action-col">Aksi</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -222,39 +283,41 @@
                                 </tbody>
                             </table>
                         </div>
-                        <button type="button" class="btn btn-outline mt-2" onclick="app.addKendalaRow()">
-                            <i class="ph ph-plus"></i> Tambah Kendala
+                        <button type="button" class="btn btn-outline mt-2" onclick="app.addKendalaRow()" aria-label="Tambah Kendala">
+                            <i class="ph ph-plus" aria-hidden="true"></i> Tambah Kendala
                         </button>
                     </div>
 
                     <!-- Section: Evaluasi Diri -->
                     <div class="form-card">
-                        <h2><i class="ph ph-user-focus"></i> Evaluasi Diri</h2>
+                        <h2><i class="ph ph-user-focus" aria-hidden="true"></i> Evaluasi Diri</h2>
                         <div class="form-grid">
                             <div class="form-group">
                                 <label for="eval_kelebihan">Kelebihan / Hal yang berjalan baik</label>
-                                <textarea id="eval_kelebihan" rows="3" required placeholder="Apa yang Anda lakukan dengan baik?"></textarea>
+                                <textarea id="eval_kelebihan" rows="3" required placeholder="Apa yang Anda lakukan dengan baik?" aria-required="true"></textarea>
                             </div>
                             <div class="form-group">
                                 <label for="eval_peningkatan">Hal yang perlu ditingkatkan</label>
-                                <textarea id="eval_peningkatan" rows="3" required placeholder="Area apa yang butuh perbaikan?"></textarea>
+                                <textarea id="eval_peningkatan" rows="3" required placeholder="Area apa yang butuh perbaikan?" aria-required="true"></textarea>
                             </div>
                         </div>
                     </div>
 
                     <!-- Section: Rencana Pengembangan -->
                     <div class="form-card">
-                        <h2><i class="ph ph-trend-up"></i> Rencana Pengembangan Bulan Depan</h2>
+                        <h2><i class="ph ph-trend-up" aria-hidden="true"></i> Rencana Pengembangan Bulan Depan</h2>
                         <div class="form-group">
-                            <textarea id="rencana" rows="3" required placeholder="Apa rencana Anda untuk bulan depan?"></textarea>
+                            <label for="rencana" class="sr-only" style="display:none;">Rencana Pengembangan</label>
+                            <textarea id="rencana" rows="3" required placeholder="Apa rencana Anda untuk bulan depan?" aria-required="true"></textarea>
                         </div>
                     </div>
 
                     <!-- Section: Penutup -->
                     <div class="form-card">
-                        <h2><i class="ph ph-check-circle"></i> Penutup</h2>
+                        <h2><i class="ph ph-check-circle" aria-hidden="true"></i> Penutup</h2>
                         <div class="form-group">
-                            <textarea id="penutup" rows="2" required placeholder="Kata penutup laporan..."></textarea>
+                            <label for="penutup" class="sr-only" style="display:none;">Penutup</label>
+                            <textarea id="penutup" rows="2" required placeholder="Kata penutup laporan..." aria-required="true"></textarea>
                         </div>
                     </div>
 
@@ -262,23 +325,83 @@
                     <div class="form-actions">
                         <button type="button" class="btn btn-outline" onclick="app.navigate('dashboard')">Batal</button>
                         <button type="submit" class="btn btn-primary">
-                            <i class="ph ph-floppy-disk"></i> Simpan Laporan
+                            <i class="ph ph-floppy-disk" aria-hidden="true"></i> Simpan Laporan
                         </button>
                     </div>
                 </form>
             </section>
 
+            <!-- Admin View -->
+            <section id="view-admin" class="view-section" style="display: none;" aria-label="Admin Panel">
+                <!-- Admin Stats -->
+                <div class="stats-grid" aria-label="Statistik Admin">
+                    <div class="stat-card">
+                        <div class="stat-icon" aria-hidden="true"><i class="ph ph-users"></i></div>
+                        <div class="stat-info">
+                            <h3>Total Pengguna</h3>
+                            <p id="admin-total-users">0</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon" aria-hidden="true"><i class="ph ph-files"></i></div>
+                        <div class="stat-info">
+                            <h3>Total Seluruh Laporan</h3>
+                            <p id="admin-total-reports">0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- User Management -->
+                <div class="form-card mt-3">
+                    <h2><i class="ph ph-shield-check" aria-hidden="true"></i> Manajemen Role Pengguna</h2>
+                    <div class="table-responsive">
+                        <table class="dynamic-table" id="table-users" aria-label="Tabel Pengguna">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Nama</th>
+                                    <th scope="col">Email</th>
+                                    <th scope="col">Role Saat Ini</th>
+                                    <th scope="col" class="action-col">Ubah Role</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Users injected via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- All Reports Overview -->
+                <div class="form-card">
+                    <h2><i class="ph ph-files" aria-hidden="true"></i> Semua Laporan</h2>
+                    <div class="table-responsive">
+                        <table class="dynamic-table" id="table-all-reports" aria-label="Tabel Semua Laporan">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Penulis</th>
+                                    <th scope="col">Periode</th>
+                                    <th scope="col">Ringkasan</th>
+                                    <th scope="col" class="action-col">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- All reports injected via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
             <!-- Print/Export Template (Hidden) -->
-            <div id="print-template" style="display: none;"></div>
+            <div id="print-template" style="display: none;" aria-hidden="true"></div>
 
         </main>
     </div>
 
     <!-- Toast Notification Container -->
-    <div id="toast-container" class="toast-container"></div>
+    <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
 
     <!-- Scripts -->
-    <!-- Document Export Library (html-docx-js alternative) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <script src="app.js"></script>
 </body>
