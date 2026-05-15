@@ -1,107 +1,305 @@
 /**
  * Laporan Bulanan Content Writer
- * Main Application Logic
+ * Main Application Logic - Modular & Optimized with Supabase
  */
 
-const app = {
-    reports: [],
-    currentTheme: 'light',
+// =========================================
+// SUPABASE CONFIGURATION
+// =========================================
+// GANTI VALUE DI BAWAH INI DENGAN PROJECT URL & ANON KEY DARI SUPABASE ANDA
+const SUPABASE_URL = 'https://YOUR_PROJECT_ID.supabase.co';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
 
-    init() {
-        this.loadTheme();
-        this.loadReports();
-        this.renderDashboard();
-        this.navigate('dashboard');
+// Initialize Supabase Client
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        // Auto-save listener
-        const form = document.getElementById('report-form');
-        form.addEventListener('input', () => this.autoSaveDraft());
+const Storage = {
+    THEME_KEY: 'cw_theme_v2',
+    DRAFT_KEY: 'cw_draft_v2',
+
+    getTheme() {
+        return localStorage.getItem(this.THEME_KEY) || 'light';
     },
 
-    // =========================================
-    // State Management (LocalStorage)
-    // =========================================
-    loadReports() {
-        const data = localStorage.getItem('cw_reports');
-        if (data) {
-            this.reports = JSON.parse(data);
-        }
+    setTheme(theme) {
+        localStorage.setItem(this.THEME_KEY, theme);
     },
 
-    saveReports() {
-        localStorage.setItem('cw_reports', JSON.stringify(this.reports));
-        this.renderDashboard();
+    saveDraft(data) {
+        localStorage.setItem(this.DRAFT_KEY, JSON.stringify(data));
     },
 
-    autoSaveDraft() {
-        const formData = this.getFormData();
-        localStorage.setItem('cw_draft', JSON.stringify(formData));
-    },
-
-    loadDraft() {
-        const draft = localStorage.getItem('cw_draft');
-        if (draft) {
-            this.fillForm(JSON.parse(draft));
-            this.showToast('Draft dimuat otomatis', 'success');
-        } else {
-            this.resetForm();
+    getDraft() {
+        try {
+            const draft = localStorage.getItem(this.DRAFT_KEY);
+            return draft ? JSON.parse(draft) : null;
+        } catch (e) {
+            return null;
         }
     },
 
     clearDraft() {
-        localStorage.removeItem('cw_draft');
+        localStorage.removeItem(this.DRAFT_KEY);
+    }
+};
+
+const Utils = {
+    formatMonth(monthStr) {
+        if (!monthStr) return '-';
+        const [year, month] = monthStr.split('-');
+        const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+        return `${months[parseInt(month, 10) - 1]} ${year}`;
     },
 
-    // =========================================
-    // Theming
-    // =========================================
-    loadTheme() {
-        const theme = localStorage.getItem('cw_theme') || 'light';
-        this.setTheme(theme);
+    escapeHTML(str) {
+        if (typeof str !== 'string') return str;
+        return str.replace(/[&<>'"]/g,
+            tag => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                "'": '&#39;',
+                '"': '&quot;'
+            }[tag])
+        );
     },
 
-    toggleTheme() {
-        const newTheme = this.currentTheme === 'light' ? 'dark' : 'light';
-        this.setTheme(newTheme);
+    formatTextForHTML(str) {
+        if (!str) return '';
+        return this.escapeHTML(str).replace(/\n/g, '<br>');
+    }
+};
+
+const UI = {
+    showToast(message, type = 'success') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+
+        const icon = type === 'success' ? 'check-circle' : 'warning-circle';
+        toast.innerHTML = `
+            <i class="ph ph-${icon}"></i>
+            <span>${Utils.escapeHTML(message)}</span>
+        `;
+
+        container.appendChild(toast);
+
+        setTimeout(() => {
+            toast.style.animation = 'slideOut 0.4s var(--transition-bounce) forwards';
+            setTimeout(() => toast.remove(), 400);
+        }, 3000);
     },
 
     setTheme(theme) {
-        this.currentTheme = theme;
         document.documentElement.setAttribute('data-theme', theme);
-        localStorage.setItem('cw_theme', theme);
-
-        const toggleBtn = document.getElementById('theme-toggle');
-        if(theme === 'dark') {
-            toggleBtn.innerHTML = '<i class="ph ph-sun"></i><span>Light Mode</span>';
-        } else {
-            toggleBtn.innerHTML = '<i class="ph ph-moon"></i><span>Dark Mode</span>';
-        }
+        const toggleBtns = document.querySelectorAll('.theme-toggle');
+        toggleBtns.forEach(toggleBtn => {
+            if (!toggleBtn.hasAttribute('aria-label') || toggleBtn.getAttribute('aria-label') !== 'Logout') {
+                if(theme === 'dark') {
+                    toggleBtn.innerHTML = '<i class="ph ph-sun"></i><span>Light Mode</span>';
+                } else {
+                    toggleBtn.innerHTML = '<i class="ph ph-moon"></i><span>Dark Mode</span>';
+                }
+            }
+        });
     },
 
-    // =========================================
-    // UI Routing
-    // =========================================
     navigate(view) {
+        const targetId = view === 'dashboard' ? 'view-dashboard' : (view === 'form' ? 'view-form' : 'view-admin');
+
         // Hide all views
-        document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.view-section').forEach(el => {
+            if (el.id !== targetId) {
+                el.classList.remove('active');
+                setTimeout(() => { if(!el.classList.contains('active')) el.style.display = 'none'; }, 300);
+            }
+        });
 
         // Update nav links
         document.querySelectorAll('.sidebar-nav li').forEach(el => el.classList.remove('active'));
 
-        if (view === 'dashboard') {
-            document.getElementById('view-dashboard').classList.add('active');
-            document.getElementById('nav-dashboard').classList.add('active');
-            document.getElementById('page-title').textContent = 'Dashboard';
-            document.getElementById('btn-header-create').style.display = 'inline-flex';
-            this.renderDashboard();
-        } else if (view === 'form') {
-            document.getElementById('view-form').classList.add('active');
-            document.getElementById('nav-create').classList.add('active');
+        setTimeout(() => {
+            const targetView = document.getElementById(targetId);
+            if (targetView) {
+                targetView.style.display = 'block';
+                void targetView.offsetWidth; // trigger reflow
+                targetView.classList.add('active');
+            }
 
+            if (view === 'dashboard') {
+                document.getElementById('nav-dashboard').classList.add('active');
+                document.getElementById('page-title').textContent = 'Dashboard';
+                document.getElementById('btn-header-create').style.display = 'inline-flex';
+            } else if (view === 'form') {
+                document.getElementById('nav-create').classList.add('active');
+                const isEdit = document.getElementById('report-id').value !== '';
+                document.getElementById('page-title').textContent = isEdit ? 'Edit Laporan' : 'Buat Laporan Baru';
+                document.getElementById('btn-header-create').style.display = 'none';
+            } else if (view === 'admin') {
+                document.getElementById('nav-admin').classList.add('active');
+                document.getElementById('page-title').textContent = 'Admin Dashboard';
+                document.getElementById('btn-header-create').style.display = 'none';
+            }
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }, 30);
+    }
+};
+
+const app = {
+    reports: [],
+    allReports: [], // for admin
+    allUsers: [], // for admin
+    currentTheme: 'light',
+    user: null,
+    profile: null,
+    isLoginMode: true,
+
+    async init() {
+        this.currentTheme = Storage.getTheme();
+        UI.setTheme(this.currentTheme);
+        this.setupListeners();
+
+        // Check Auth Session
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+            await this.handleUserLogin(session.user);
+        } else {
+            this.showAuth();
+        }
+
+        // Listen for auth changes
+        supabase.auth.onAuthStateChange(async (event, session) => {
+            if (event === 'SIGNED_IN') {
+                await this.handleUserLogin(session.user);
+            } else if (event === 'SIGNED_OUT') {
+                this.handleUserLogout();
+            }
+        });
+    },
+
+    setupListeners() {
+        const form = document.getElementById('report-form');
+        form.addEventListener('input', this.debounce(() => this.autoSaveDraft(), 500));
+    },
+
+    debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    },
+
+    // =========================================
+    // AUTHENTICATION LOGIC
+    // =========================================
+    showAuth() {
+        document.getElementById('auth-overlay').style.display = 'flex';
+        document.getElementById('app-main-container').style.display = 'none';
+    },
+
+    hideAuth() {
+        document.getElementById('auth-overlay').style.display = 'none';
+        document.getElementById('app-main-container').style.display = 'flex';
+    },
+
+    toggleAuthMode() {
+        this.isLoginMode = !this.isLoginMode;
+        document.getElementById('group-fullname').style.display = this.isLoginMode ? 'none' : 'flex';
+        document.getElementById('btn-auth-submit').textContent = this.isLoginMode ? 'Login' : 'Daftar';
+        document.getElementById('auth-subtitle').textContent = this.isLoginMode ? 'Login untuk mengakses dashboard Anda' : 'Buat akun baru untuk mulai membuat laporan';
+        document.getElementById('auth-toggle-text').innerHTML = this.isLoginMode ?
+            'Belum punya akun? <a href="#" onclick="app.toggleAuthMode()">Daftar di sini</a>' :
+            'Sudah punya akun? <a href="#" onclick="app.toggleAuthMode()">Login di sini</a>';
+    },
+
+    async handleAuth(e) {
+        e.preventDefault();
+        const email = document.getElementById('auth-email').value;
+        const password = document.getElementById('auth-password').value;
+        const fullName = document.getElementById('auth-fullname').value;
+        const btn = document.getElementById('btn-auth-submit');
+
+        btn.disabled = true;
+        btn.textContent = 'Memproses...';
+
+        try {
+            if (this.isLoginMode) {
+                const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+                if (error) throw error;
+                UI.showToast('Login berhasil', 'success');
+            } else {
+                const { data, error } = await supabase.auth.signUp({
+                    email,
+                    password,
+                    options: { data: { full_name: fullName } }
+                });
+                if (error) throw error;
+                UI.showToast('Pendaftaran berhasil. Silakan login.', 'success');
+                if(!data.session) this.toggleAuthMode(); // Wait for email confirmation if enabled
+            }
+        } catch (error) {
+            UI.showToast(error.message, 'error');
+            btn.disabled = false;
+            btn.textContent = this.isLoginMode ? 'Login' : 'Daftar';
+        }
+    },
+
+    async handleUserLogin(user) {
+        this.user = user;
+        this.hideAuth();
+
+        // Fetch User Profile (Role)
+        const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single();
+
+        if (profile) {
+            this.profile = profile;
+            document.getElementById('display-user-name').textContent = profile.full_name || user.email;
+            document.getElementById('display-user-role').textContent = profile.role;
+
+            // Show Admin Menu if admin
+            if (profile.role === 'admin') {
+                document.getElementById('nav-admin').style.display = 'flex';
+            } else {
+                document.getElementById('nav-admin').style.display = 'none';
+            }
+        }
+
+        await this.loadReports();
+        this.navigate('dashboard');
+    },
+
+    async logout() {
+        await supabase.auth.signOut();
+    },
+
+    handleUserLogout() {
+        this.user = null;
+        this.profile = null;
+        this.reports = [];
+        this.showAuth();
+        document.getElementById('auth-form').reset();
+        document.getElementById('btn-auth-submit').disabled = false;
+        document.getElementById('btn-auth-submit').textContent = 'Login';
+    },
+
+    toggleTheme() {
+        this.currentTheme = this.currentTheme === 'light' ? 'dark' : 'light';
+        UI.setTheme(this.currentTheme);
+        Storage.setTheme(this.currentTheme);
+    },
+
+    navigate(view) {
+        if (view === 'form') {
             const isEdit = document.getElementById('report-id').value !== '';
-            document.getElementById('page-title').textContent = isEdit ? 'Edit Laporan' : 'Buat Laporan Baru';
-            document.getElementById('btn-header-create').style.display = 'none';
-
             if (!isEdit) {
                 this.loadDraft();
                 if(document.getElementById('table-target').querySelector('tbody').children.length === 0) {
@@ -112,26 +310,49 @@ const app = {
                 }
             }
         }
+        UI.navigate(view);
+        if(view === 'dashboard'){
+            this.renderDashboard();
+        } else if (view === 'admin' && this.profile && this.profile.role === 'admin') {
+            this.loadAdminData();
+        }
     },
 
     // =========================================
-    // Dynamic Form Logic
+    // CRUD LOGIC WITH SUPABASE
     // =========================================
+    async loadReports() {
+        try {
+            const { data, error } = await supabase
+                .from('reports')
+                .select('*')
+                .eq('user_id', this.user.id)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+            this.reports = data || [];
+            this.renderDashboard();
+        } catch (error) {
+            UI.showToast('Gagal memuat laporan', 'error');
+            console.error(error);
+        }
+    },
+
     addTargetRow(data = { target: '', pencapaian: '', status: 'Tercapai' }) {
         const tbody = document.querySelector('#table-target tbody');
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td><input type="text" class="target-input" value="${data.target}" placeholder="Target pekerjaan" required></td>
-            <td><input type="text" class="pencapaian-input" value="${data.pencapaian}" placeholder="Hasil/Pencapaian" required></td>
+            <td><input type="text" class="target-input" value="${Utils.escapeHTML(data.target)}" placeholder="Target pekerjaan" required aria-label="Target"></td>
+            <td><input type="text" class="pencapaian-input" value="${Utils.escapeHTML(data.pencapaian)}" placeholder="Hasil/Pencapaian" required aria-label="Pencapaian"></td>
             <td>
-                <select class="status-input">
+                <select class="status-input" aria-label="Status">
                     <option value="Tercapai" ${data.status === 'Tercapai' ? 'selected' : ''}>Tercapai</option>
                     <option value="Sebagian" ${data.status === 'Sebagian' ? 'selected' : ''}>Sebagian</option>
                     <option value="Tidak Tercapai" ${data.status === 'Tidak Tercapai' ? 'selected' : ''}>Tidak Tercapai</option>
                 </select>
             </td>
             <td class="action-col">
-                <button type="button" class="btn-icon danger" onclick="this.closest('tr').remove(); app.autoSaveDraft();">
+                <button type="button" class="btn-icon danger" onclick="this.closest('tr').remove(); app.autoSaveDraft();" aria-label="Hapus Baris">
                     <i class="ph ph-trash"></i>
                 </button>
             </td>
@@ -143,11 +364,11 @@ const app = {
         const tbody = document.querySelector('#table-kendala tbody');
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td><input type="text" class="kendala-input" value="${data.kendala}" placeholder="Kendala/Masalah" required></td>
-            <td><input type="text" class="dampak-input" value="${data.dampak}" placeholder="Dampak" required></td>
-            <td><input type="text" class="solusi-input" value="${data.solusi}" placeholder="Solusi/Tindakan" required></td>
+            <td><input type="text" class="kendala-input" value="${Utils.escapeHTML(data.kendala)}" placeholder="Kendala/Masalah" required aria-label="Kendala"></td>
+            <td><input type="text" class="dampak-input" value="${Utils.escapeHTML(data.dampak)}" placeholder="Dampak" required aria-label="Dampak"></td>
+            <td><input type="text" class="solusi-input" value="${Utils.escapeHTML(data.solusi)}" placeholder="Solusi/Tindakan" required aria-label="Solusi"></td>
             <td class="action-col">
-                <button type="button" class="btn-icon danger" onclick="this.closest('tr').remove(); app.autoSaveDraft();">
+                <button type="button" class="btn-icon danger" onclick="this.closest('tr').remove(); app.autoSaveDraft();" aria-label="Hapus Baris">
                     <i class="ph ph-trash"></i>
                 </button>
             </td>
@@ -156,60 +377,53 @@ const app = {
     },
 
     getFormData() {
-        // Collect Target Data
-        const targets = [];
-        document.querySelectorAll('#table-target tbody tr').forEach(row => {
-            targets.push({
-                target: row.querySelector('.target-input').value,
-                pencapaian: row.querySelector('.pencapaian-input').value,
-                status: row.querySelector('.status-input').value
-            });
-        });
+        const targets = Array.from(document.querySelectorAll('#table-target tbody tr')).map(row => ({
+            target: row.querySelector('.target-input').value,
+            pencapaian: row.querySelector('.pencapaian-input').value,
+            status: row.querySelector('.status-input').value
+        }));
 
-        // Collect Kendala Data
-        const kendalas = [];
-        document.querySelectorAll('#table-kendala tbody tr').forEach(row => {
-            kendalas.push({
-                kendala: row.querySelector('.kendala-input').value,
-                dampak: row.querySelector('.dampak-input').value,
-                solusi: row.querySelector('.solusi-input').value
-            });
-        });
+        const kendalas = Array.from(document.querySelectorAll('#table-kendala tbody tr')).map(row => ({
+            kendala: row.querySelector('.kendala-input').value,
+            dampak: row.querySelector('.dampak-input').value,
+            solusi: row.querySelector('.solusi-input').value
+        }));
 
         return {
-            id: document.getElementById('report-id').value,
+            id: document.getElementById('report-id').value || null,
+            user_id: this.user.id,
             nama: document.getElementById('nama').value,
             posisi: document.getElementById('posisi').value,
             divisi: document.getElementById('divisi').value,
-            periode: document.getElementById('periode').value, // YYYY-MM
+            periode: document.getElementById('periode').value,
             atasan: document.getElementById('atasan').value,
             ringkasan: document.getElementById('ringkasan').value,
-            targets: targets,
+            targets,
             detail_website: document.getElementById('detail_website').value,
             detail_socmed: document.getElementById('detail_socmed').value,
             detail_riset: document.getElementById('detail_riset').value,
             pencapaian_utama: document.getElementById('pencapaian_utama').value,
-            kendalas: kendalas,
+            kendalas,
             eval_kelebihan: document.getElementById('eval_kelebihan').value,
             eval_peningkatan: document.getElementById('eval_peningkatan').value,
             rencana: document.getElementById('rencana').value,
-            penutup: document.getElementById('penutup').value,
-            timestamp: new Date().toISOString()
+            penutup: document.getElementById('penutup').value
         };
     },
 
     fillForm(data) {
         if(!data) return;
 
-        document.getElementById('report-id').value = data.id || '';
-        document.getElementById('nama').value = data.nama || '';
-        document.getElementById('posisi').value = data.posisi || '';
-        document.getElementById('divisi').value = data.divisi || '';
-        document.getElementById('periode').value = data.periode || '';
-        document.getElementById('atasan').value = data.atasan || '';
-        document.getElementById('ringkasan').value = data.ringkasan || '';
+        const fields = ['nama', 'posisi', 'divisi', 'periode', 'atasan', 'ringkasan',
+                       'detail_website', 'detail_socmed', 'detail_riset', 'pencapaian_utama',
+                       'eval_kelebihan', 'eval_peningkatan', 'rencana', 'penutup'];
 
-        // Fill Targets
+        document.getElementById('report-id').value = data.id || '';
+        fields.forEach(field => {
+            const el = document.getElementById(field);
+            if(el) el.value = data[field] || '';
+        });
+
         const targetBody = document.querySelector('#table-target tbody');
         targetBody.innerHTML = '';
         if (data.targets && data.targets.length > 0) {
@@ -218,12 +432,6 @@ const app = {
             this.addTargetRow();
         }
 
-        document.getElementById('detail_website').value = data.detail_website || '';
-        document.getElementById('detail_socmed').value = data.detail_socmed || '';
-        document.getElementById('detail_riset').value = data.detail_riset || '';
-        document.getElementById('pencapaian_utama').value = data.pencapaian_utama || '';
-
-        // Fill Kendala
         const kendalaBody = document.querySelector('#table-kendala tbody');
         kendalaBody.innerHTML = '';
         if (data.kendalas && data.kendalas.length > 0) {
@@ -231,11 +439,6 @@ const app = {
         } else {
             this.addKendalaRow();
         }
-
-        document.getElementById('eval_kelebihan').value = data.eval_kelebihan || '';
-        document.getElementById('eval_peningkatan').value = data.eval_peningkatan || '';
-        document.getElementById('rencana').value = data.rencana || '';
-        document.getElementById('penutup').value = data.penutup || '';
     },
 
     resetForm() {
@@ -247,69 +450,90 @@ const app = {
         this.addKendalaRow();
     },
 
-    saveReport(event) {
+    autoSaveDraft() {
+        if (document.getElementById('report-id').value) return;
+        const data = this.getFormData();
+        if(data.nama || data.periode || data.ringkasan) {
+            Storage.saveDraft(data);
+        }
+    },
+
+    loadDraft() {
+        const draft = Storage.getDraft();
+        if (draft) {
+            this.fillForm(draft);
+            UI.showToast('Draft dimuat otomatis', 'success');
+        } else {
+            this.resetForm();
+        }
+    },
+
+    async saveReport(event) {
         event.preventDefault();
         const data = this.getFormData();
+        const submitBtn = event.target.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
 
-        if (data.id) {
-            // Update
-            const index = this.reports.findIndex(r => r.id === data.id);
-            if (index !== -1) {
-                this.reports[index] = data;
-                this.showToast('Laporan berhasil diperbarui', 'success');
+        try {
+            if (data.id) {
+                // Update
+                const { error } = await supabase.from('reports').update(data).eq('id', data.id);
+                if (error) throw error;
+                UI.showToast('Laporan berhasil diperbarui', 'success');
+            } else {
+                // Insert
+                delete data.id; // supabase auto generates UUID
+                const { error } = await supabase.from('reports').insert([data]);
+                if (error) throw error;
+                UI.showToast('Laporan baru berhasil disimpan', 'success');
             }
-        } else {
-            // Create new
-            data.id = this.generateId();
-            this.reports.unshift(data); // Add to beginning
-            this.showToast('Laporan baru berhasil disimpan', 'success');
-        }
 
-        this.saveReports();
-        this.clearDraft();
-        this.resetForm();
-        this.navigate('dashboard');
+            Storage.clearDraft();
+            this.resetForm();
+            await this.loadReports();
+            this.navigate('dashboard');
+        } catch (error) {
+            UI.showToast('Gagal menyimpan laporan: ' + error.message, 'error');
+        } finally {
+            submitBtn.disabled = false;
+        }
     },
 
     editReport(id) {
-        const report = this.reports.find(r => r.id === id);
+        const report = this.reports.find(r => r.id === id) || this.allReports.find(r => r.id === id);
         if (report) {
             this.fillForm(report);
             this.navigate('form');
         }
     },
 
-    deleteReport(id) {
+    async deleteReport(id) {
         if (confirm('Apakah Anda yakin ingin menghapus laporan ini? Tindakan ini tidak dapat dibatalkan.')) {
-            this.reports = this.reports.filter(r => r.id !== id);
-            this.saveReports();
-            this.showToast('Laporan berhasil dihapus', 'success');
+            try {
+                const { error } = await supabase.from('reports').delete().eq('id', id);
+                if (error) throw error;
+                UI.showToast('Laporan berhasil dihapus', 'success');
+                await this.loadReports();
+
+                // If in admin view, refresh admin data too
+                if (document.getElementById('view-admin').classList.contains('active')) {
+                    this.loadAdminData();
+                }
+            } catch (error) {
+                UI.showToast('Gagal menghapus laporan', 'error');
+            }
         }
     },
 
     // =========================================
-    // Dashboard Rendering & Filtering
+    // DASHBOARD & ADMIN RENDER LOGIC
     // =========================================
-    formatMonth(monthStr) {
-        if (!monthStr) return '-';
-        const [year, month] = monthStr.split('-');
-        const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-        return `${months[parseInt(month) - 1]} ${year}`;
-    },
-
     renderDashboard() {
-        const list = document.getElementById('report-list');
-        const emptyState = document.getElementById('empty-state');
-
-        // Update Stats
         document.getElementById('stat-total-reports').textContent = this.reports.length;
-        if (this.reports.length > 0) {
-            document.getElementById('stat-latest-report').textContent = this.formatMonth(this.reports[0].periode);
-        } else {
-            document.getElementById('stat-latest-report').textContent = '-';
-        }
+        document.getElementById('stat-latest-report').textContent =
+            this.reports.length > 0 ? Utils.formatMonth(this.reports[0].periode) : '-';
 
-        this.filterReports(); // This will handle rendering the list
+        this.filterReports();
     },
 
     filterReports() {
@@ -322,41 +546,40 @@ const app = {
 
         const filtered = this.reports.filter(report => {
             const matchesSearch = report.nama.toLowerCase().includes(searchQuery) ||
-                                  this.formatMonth(report.periode).toLowerCase().includes(searchQuery);
-            let matchesMonth = true;
-            if (filterMonth) {
-                const reportMonth = report.periode.split('-')[1];
-                matchesMonth = reportMonth === filterMonth;
-            }
+                                  Utils.formatMonth(report.periode).toLowerCase().includes(searchQuery);
+            const reportMonth = report.periode.split('-')[1];
+            const matchesMonth = !filterMonth || reportMonth === filterMonth;
+
             return matchesSearch && matchesMonth;
         });
 
         if (filtered.length === 0) {
             list.appendChild(emptyState);
-            emptyState.style.display = 'block';
+            emptyState.style.display = 'flex';
         } else {
             emptyState.style.display = 'none';
-            filtered.forEach(report => {
+            filtered.forEach((report, index) => {
                 const card = document.createElement('div');
                 card.className = 'report-card';
+                card.style.animationDelay = `${index * 0.05}s`;
                 card.innerHTML = `
                     <div class="report-header">
-                        <div class="report-title">Laporan ${report.nama.split(' ')[0]}</div>
-                        <div class="report-period">${this.formatMonth(report.periode)}</div>
+                        <div class="report-title">Laporan ${Utils.escapeHTML(report.nama.split(' ')[0])}</div>
+                        <div class="report-period">${Utils.formatMonth(report.periode)}</div>
                     </div>
-                    <div class="report-summary">${report.ringkasan}</div>
+                    <div class="report-summary">${Utils.escapeHTML(report.ringkasan)}</div>
                     <div class="report-actions">
-                        <button class="btn-icon" title="Edit" onclick="app.editReport('${report.id}')">
+                        <button class="btn-icon" title="Edit" onclick="app.editReport('${report.id}')" aria-label="Edit Laporan">
                             <i class="ph ph-pencil-simple"></i>
                         </button>
-                        <button class="btn-icon" title="Print to PDF" onclick="app.printReport('${report.id}')">
+                        <button class="btn-icon" title="Print to PDF" onclick="app.printReport('${report.id}')" aria-label="Print Laporan">
                             <i class="ph ph-printer"></i>
                         </button>
-                        <button class="btn-icon" title="Export DOCX" onclick="app.exportWord('${report.id}')">
+                        <button class="btn-icon" title="Export DOCX" onclick="app.exportWord('${report.id}')" aria-label="Export DOCX">
                             <i class="ph ph-file-doc"></i>
                         </button>
                         <div style="flex: 1"></div>
-                        <button class="btn-icon danger" title="Hapus" onclick="app.deleteReport('${report.id}')">
+                        <button class="btn-icon danger" title="Hapus" onclick="app.deleteReport('${report.id}')" aria-label="Hapus Laporan">
                             <i class="ph ph-trash"></i>
                         </button>
                     </div>
@@ -366,143 +589,175 @@ const app = {
         }
     },
 
+    async loadAdminData() {
+        try {
+            // Fetch Users
+            const { data: users, error: errUser } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+            if (errUser) throw errUser;
+            this.allUsers = users;
+            document.getElementById('admin-total-users').textContent = users.length;
+
+            const userBody = document.querySelector('#table-users tbody');
+            userBody.innerHTML = '';
+            users.forEach(u => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${Utils.escapeHTML(u.full_name || '-')}</td>
+                    <td>${Utils.escapeHTML(u.email || '-')}</td>
+                    <td><span style="padding: 4px 8px; border-radius: 4px; background: ${u.role === 'admin' ? 'var(--primary-light)' : 'var(--bg-element)'}; color: ${u.role === 'admin' ? 'var(--primary-color)' : 'var(--text-secondary)'}; font-size: 0.8rem; font-weight: 600;">${u.role}</span></td>
+                    <td class="action-col">
+                        <select onchange="app.changeUserRole('${u.id}', this.value)" style="padding: 4px; border-radius: 4px;">
+                            <option value="writer" ${u.role === 'writer' ? 'selected' : ''}>Writer</option>
+                            <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
+                        </select>
+                    </td>
+                `;
+                userBody.appendChild(tr);
+            });
+
+            // Fetch All Reports
+            const { data: reports, error: errRep } = await supabase.from('reports').select('*, profiles(full_name)').order('created_at', { ascending: false });
+            if (errRep) throw errRep;
+            this.allReports = reports;
+            document.getElementById('admin-total-reports').textContent = reports.length;
+
+            const repBody = document.querySelector('#table-all-reports tbody');
+            repBody.innerHTML = '';
+            reports.forEach(r => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${Utils.escapeHTML(r.nama)}</td>
+                    <td>${Utils.formatMonth(r.periode)}</td>
+                    <td><div style="max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${Utils.escapeHTML(r.ringkasan)}</div></td>
+                    <td class="action-col">
+                         <button class="btn-icon" style="display:inline-flex; padding: 4px;" title="Lihat/Edit" onclick="app.editReport('${r.id}')"><i class="ph ph-eye"></i></button>
+                    </td>
+                `;
+                repBody.appendChild(tr);
+            });
+
+        } catch (error) {
+            UI.showToast('Gagal memuat data admin', 'error');
+        }
+    },
+
+    async changeUserRole(userId, newRole) {
+        if(userId === this.user.id) {
+            UI.showToast('Tidak bisa mengubah role Anda sendiri', 'error');
+            this.loadAdminData(); // reset select
+            return;
+        }
+
+        try {
+            const { error } = await supabase.from('profiles').update({ role: newRole }).eq('id', userId);
+            if(error) throw error;
+            UI.showToast('Role berhasil diubah', 'success');
+            this.loadAdminData();
+        } catch(error) {
+            UI.showToast('Gagal mengubah role', 'error');
+        }
+    },
+
     // =========================================
-    // Export and Print
+    // EXPORT AND PRINT LOGIC
     // =========================================
     generateHTMLContent(report) {
-        let targetsHTML = '';
-        report.targets.forEach(t => {
-            targetsHTML += `<tr><td>${t.target}</td><td>${t.pencapaian}</td><td>${t.status}</td></tr>`;
-        });
+        const buildRows = (items, cols) => items.map(item =>
+            `<tr>${cols.map(col => `<td>${Utils.escapeHTML(item[col] || '')}</td>`).join('')}</tr>`
+        ).join('');
 
-        let kendalaHTML = '';
-        report.kendalas.forEach(k => {
-            kendalaHTML += `<tr><td>${k.kendala}</td><td>${k.dampak}</td><td>${k.solusi}</td></tr>`;
-        });
+        const targetsHTML = buildRows(report.targets, ['target', 'pencapaian', 'status']);
+        const kendalaHTML = buildRows(report.kendalas, ['kendala', 'dampak', 'solusi']);
 
         return `
             <div class="print-doc">
                 <h1>Laporan Bulanan Kinerja</h1>
-
                 <h2>1. Identitas</h2>
                 <table>
-                    <tr><td width="30%"><strong>Nama</strong></td><td>${report.nama}</td></tr>
-                    <tr><td><strong>Posisi</strong></td><td>${report.posisi}</td></tr>
-                    <tr><td><strong>Divisi</strong></td><td>${report.divisi}</td></tr>
-                    <tr><td><strong>Periode</strong></td><td>${this.formatMonth(report.periode)}</td></tr>
-                    <tr><td><strong>Atasan</strong></td><td>${report.atasan}</td></tr>
+                    <tr><th width="30%">Nama</th><td>${Utils.escapeHTML(report.nama)}</td></tr>
+                    <tr><th>Posisi</th><td>${Utils.escapeHTML(report.posisi)}</td></tr>
+                    <tr><th>Divisi</th><td>${Utils.escapeHTML(report.divisi)}</td></tr>
+                    <tr><th>Periode</th><td>${Utils.formatMonth(report.periode)}</td></tr>
+                    <tr><th>Atasan</th><td>${Utils.escapeHTML(report.atasan)}</td></tr>
                 </table>
 
                 <h2>2. Ringkasan Pekerjaan</h2>
-                <p>${report.ringkasan.replace(/\n/g, '<br>')}</p>
+                <p>${Utils.formatTextForHTML(report.ringkasan)}</p>
 
                 <h2>3. Target dan Pencapaian</h2>
                 <table>
-                    <thead>
-                        <tr><th>Target</th><th>Pencapaian</th><th>Status</th></tr>
-                    </thead>
+                    <thead><tr><th>Target</th><th>Pencapaian</th><th>Status</th></tr></thead>
                     <tbody>${targetsHTML}</tbody>
                 </table>
 
                 <h2>4. Detail Pekerjaan</h2>
-                <p><strong>Content Website:</strong><br>${report.detail_website.replace(/\n/g, '<br>')}</p>
-                <p><strong>Media Sosial:</strong><br>${report.detail_socmed.replace(/\n/g, '<br>')}</p>
-                <p><strong>Riset dan Analisis:</strong><br>${report.detail_riset.replace(/\n/g, '<br>')}</p>
+                <p><strong>Content Website:</strong><br>${Utils.formatTextForHTML(report.detail_website)}</p>
+                <p><strong>Media Sosial:</strong><br>${Utils.formatTextForHTML(report.detail_socmed)}</p>
+                <p><strong>Riset dan Analisis:</strong><br>${Utils.formatTextForHTML(report.detail_riset)}</p>
 
                 <h2>5. Pencapaian Utama</h2>
-                <p>${report.pencapaian_utama.replace(/\n/g, '<br>')}</p>
+                <p>${Utils.formatTextForHTML(report.pencapaian_utama)}</p>
 
                 <h2>6. Kendala dan Solusi</h2>
                 <table>
-                    <thead>
-                        <tr><th>Kendala</th><th>Dampak</th><th>Solusi</th></tr>
-                    </thead>
+                    <thead><tr><th>Kendala</th><th>Dampak</th><th>Solusi</th></tr></thead>
                     <tbody>${kendalaHTML}</tbody>
                 </table>
 
                 <h2>7. Evaluasi Diri</h2>
-                <p><strong>Kelebihan / Hal baik:</strong><br>${report.eval_kelebihan.replace(/\n/g, '<br>')}</p>
-                <p><strong>Hal yang perlu ditingkatkan:</strong><br>${report.eval_peningkatan.replace(/\n/g, '<br>')}</p>
+                <p><strong>Kelebihan / Hal baik:</strong><br>${Utils.formatTextForHTML(report.eval_kelebihan)}</p>
+                <p><strong>Hal yang perlu ditingkatkan:</strong><br>${Utils.formatTextForHTML(report.eval_peningkatan)}</p>
 
                 <h2>8. Rencana Pengembangan</h2>
-                <p>${report.rencana.replace(/\n/g, '<br>')}</p>
+                <p>${Utils.formatTextForHTML(report.rencana)}</p>
 
                 <h2>9. Penutup</h2>
-                <p>${report.penutup.replace(/\n/g, '<br>')}</p>
+                <p>${Utils.formatTextForHTML(report.penutup)}</p>
             </div>
         `;
     },
 
     printReport(id) {
-        const report = this.reports.find(r => r.id === id);
+        const report = this.reports.find(r => r.id === id) || this.allReports.find(r => r.id === id);
         if (!report) return;
 
         const printTemplate = document.getElementById('print-template');
         printTemplate.innerHTML = this.generateHTMLContent(report);
 
-        // Trigger browser print
         window.print();
-
-        // Hide after print dialogue
-        setTimeout(() => {
-            printTemplate.innerHTML = '';
-        }, 1000);
+        setTimeout(() => printTemplate.innerHTML = '', 1000);
     },
 
     exportWord(id) {
-        const report = this.reports.find(r => r.id === id);
+        const report = this.reports.find(r => r.id === id) || this.allReports.find(r => r.id === id);
         if (!report) return;
 
-        // Create a simple MS Word compatible HTML structure
         const header = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
         <head><meta charset='utf-8'><title>Export HTML to Word</title>
         <style>
             body { font-family: 'Times New Roman', serif; }
             table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
             th, td { border: 1px solid black; padding: 8px; text-align: left; }
-            h1 { text-align: center; font-size: 18pt; }
-            h2 { font-size: 14pt; border-bottom: 1px solid black; margin-top: 20px; }
+            h1 { text-align: center; font-size: 18pt; margin-bottom: 24px; }
+            h2 { font-size: 14pt; border-bottom: 1px solid black; margin-top: 20px; padding-bottom: 4px; }
+            p { margin-bottom: 12px; line-height: 1.5; }
         </style>
         </head><body>`;
         const footer = "</body></html>";
         const content = this.generateHTMLContent(report);
         const sourceHTML = header + content + footer;
 
-        const source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML);
-        const fileDownload = document.createElement("a");
-        document.body.appendChild(fileDownload);
-        fileDownload.href = source;
-        fileDownload.download = `Laporan_Bulanan_${report.nama.replace(/\s+/g, '_')}_${report.periode}.doc`;
-        fileDownload.click();
-        document.body.removeChild(fileDownload);
+        try {
+            const blob = new Blob(['\ufeff', sourceHTML], { type: 'application/msword' });
+            const fileName = `Laporan_Bulanan_${report.nama.replace(/\s+/g, '_')}_${report.periode}.doc`;
 
-        this.showToast('Laporan berhasil di-export ke DOC', 'success');
-    },
-
-    // Utilities
-    generateId() {
-        return Date.now().toString(36) + Math.random().toString(36).substr(2);
-    },
-
-    showToast(message, type = 'success') {
-        const container = document.getElementById('toast-container');
-        const toast = document.createElement('div');
-        toast.className = `toast ${type}`;
-
-        const icon = type === 'success' ? 'check-circle' : 'warning-circle';
-        toast.innerHTML = `
-            <i class="ph ph-${icon}" style="font-size: 1.5rem;"></i>
-            <span>${message}</span>
-        `;
-
-        container.appendChild(toast);
-
-        setTimeout(() => {
-            toast.style.animation = 'slideOut 0.3s ease forwards';
-            setTimeout(() => toast.remove(), 300);
-        }, 3000);
+            saveAs(blob, fileName);
+            UI.showToast('Laporan berhasil di-export ke DOC', 'success');
+        } catch (e) {
+            console.error("Export failed", e);
+            UI.showToast('Gagal melakukan export dokumen', 'error');
+        }
     }
 };
 
-// Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => app.init());
