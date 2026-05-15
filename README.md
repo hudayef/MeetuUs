@@ -1,4 +1,4 @@
-# 📊 Content Writer Monthly Report Dashboard
+# 📊 Content Writer Monthly Report Dashboard (with Supabase)
 
 A premium, modern SaaS-style dashboard built for Content Writers to generate, manage, and export their monthly performance reports.
 
@@ -7,67 +7,55 @@ A premium, modern SaaS-style dashboard built for Content Writers to generate, ma
 
 ## ✨ Features
 
+- **Supabase Authentication:** Secure email/password login and registration.
+- **Database online:** Reports are safely stored in a Postgres Database powered by Supabase.
+- **Role-Based Access Control (RBAC):** Distinct permissions for `writer` and `admin` roles, secured by Row Level Security (RLS).
+- **Admin Dashboard:** Admins can view all reports globally and change user roles dynamically.
 - **Premium UI/UX:** Clean, modern 2026 SaaS design with glassmorphism effects and smooth animations.
-- **No Build Required:** Built purely with HTML, CSS, and Vanilla JavaScript. Extremely lightweight.
-- **Local Storage Architecture:** 100% client-side data persistence. No backend required.
-- **Auto-Save Drafts:** Never lose your work while filling out the long report form.
 - **Export to DOC:** Generate perfectly formatted MS Word `.doc` documents with one click.
 - **Print Mode:** Optimized CSS for printing directly to PDF or paper.
 - **Dark Mode:** Elegant dark theme with user preference memory.
-- **Fully Responsive:** Works perfectly on desktop, tablet, and mobile devices.
 
-## 🚀 Getting Started (Local Development)
+## 🚀 Setup & Installation (Supabase)
 
-Because this project relies entirely on client-side technologies without external framework dependencies, running it is incredibly simple.
+To run this application, you must connect it to your own Supabase project.
 
-1. Clone the repository:
-   ```bash
-   git clone <repository-url>
-   ```
-2. Open `index.html` in your modern web browser.
-   *(Alternatively, use a local server like Live Server in VS Code for a better development experience).*
+1. **Create a Supabase Project:**
+   - Go to [Supabase](https://supabase.com) and create a new project.
+
+2. **Run Database Migration:**
+   - Go to the **SQL Editor** in your Supabase dashboard.
+   - Copy the entire contents of the `supabase_schema.sql` file provided in this repository.
+   - Paste it into the editor and click **Run**. This will automatically create all necessary tables, policies, and triggers.
+
+3. **Connect the App:**
+   - Go to **Project Settings -> API** in Supabase.
+   - Copy your **Project URL** and **anon public API key**.
+   - Open `app.js` in this repository and replace the placeholders at the top of the file:
+     ```javascript
+     const SUPABASE_URL = 'https://YOUR_PROJECT_ID.supabase.co';
+     const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+     ```
+
+4. **Run the App:**
+   - Open `index.html` in your modern web browser or use a local server like Live Server.
+
+## 👑 How to become an Admin
+
+By default, all new users who register are assigned the `writer` role.
+To make yourself an admin so you can access the Admin Dashboard:
+1. Register a new account on the app.
+2. Go to your Supabase Dashboard -> Table Editor.
+3. Open the `profiles` table.
+4. Find your email/record, and double click the `role` cell.
+5. Change it from `writer` to `admin` and save.
+6. Refresh the web app. You will now see the Admin Panel.
 
 ## ☁️ Deployment (Vercel)
 
 This application is fully optimized for static deployment on Vercel.
 
-### Method 1: Vercel CLI (Recommended)
-1. Install Vercel CLI: `npm i -g vercel`
-2. Run `vercel` in the project root directory.
-3. Follow the prompts to deploy.
-
-### Method 2: Git Integration
 1. Push this repository to GitHub/GitLab/Bitbucket.
 2. Go to your [Vercel Dashboard](https://vercel.com/dashboard).
 3. Click **Add New** > **Project**.
-4. Import your repository.
-5. Vercel will automatically detect the settings from `vercel.json` and deploy your app instantly.
-
-## 🛠 Architecture & Tech Stack
-
-- **HTML5:** Semantic, accessible structure with ARIA labels.
-- **CSS3:** Custom properties (variables), Flexbox/Grid, Glassmorphism, animations. No CSS frameworks used.
-- **Vanilla JavaScript:** Modular architecture (`Storage`, `UI`, `Utils`, `app` instances) for high maintainability.
-- **Phosphor Icons:** Beautiful, consistent iconography via CDN.
-- **FileSaver.js:** Lightweight library for triggering file downloads (used for Word Export).
-
-## 📁 File Structure
-
-```text
-/
-├── index.html       # Semantic HTML layout and app skeleton
-├── style.css        # Premium SaaS styling and responsive design
-├── app.js           # Modular JS logic (State, UI, Utilities)
-├── vercel.json      # Vercel deployment configuration & security headers
-└── README.md        # Project documentation
-```
-
-## 🔒 Security & Performance
-
-- Input fields are sanitized before rendering to prevent XSS.
-- `vercel.json` includes strict security headers (`X-Frame-Options`, `X-Content-Type-Options`, `X-XSS-Protection`).
-- Static assets are aggressively cached on deployment for maximum performance.
-
-## 📝 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
+4. Import your repository. Vercel will detect `vercel.json` and deploy it instantly.

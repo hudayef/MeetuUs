@@ -11,11 +11,49 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Phosphor Icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Supabase JS SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <!-- Stylesheet -->
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="app-container">
+    <!-- Auth Overlay (Login/Register) -->
+    <div id="auth-overlay" class="auth-overlay">
+        <div class="auth-card glass-panel">
+            <div class="auth-header">
+                <div class="logo justify-center">
+                    <i class="ph ph-files" aria-hidden="true"></i>
+                    <span>CW Report</span>
+                </div>
+                <p id="auth-subtitle">Login untuk mengakses dashboard Anda</p>
+            </div>
+
+            <form id="auth-form" onsubmit="app.handleAuth(event)">
+                <div class="form-group" id="group-fullname" style="display: none;">
+                    <label for="auth-fullname">Nama Lengkap</label>
+                    <input type="text" id="auth-fullname" placeholder="John Doe">
+                </div>
+                <div class="form-group">
+                    <label for="auth-email">Email</label>
+                    <input type="email" id="auth-email" required placeholder="email@perusahaan.com">
+                </div>
+                <div class="form-group">
+                    <label for="auth-password">Password</label>
+                    <input type="password" id="auth-password" required placeholder="Minimal 6 karakter">
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100 mt-2" id="btn-auth-submit">
+                    Login
+                </button>
+            </form>
+
+            <div class="auth-footer">
+                <p id="auth-toggle-text">Belum punya akun? <a href="#" onclick="app.toggleAuthMode()">Daftar di sini</a></p>
+            </div>
+        </div>
+    </div>
+
+    <div class="app-container" id="app-main-container" style="display: none;">
         <!-- Sidebar Navigation -->
         <aside class="sidebar" aria-label="Main Navigation">
             <div class="sidebar-header">
@@ -38,9 +76,27 @@
                             <span>Buat Laporan</span>
                         </a>
                     </li>
+                    <!-- Admin Only Menu -->
+                    <li id="nav-admin" style="display: none;">
+                        <a href="#" onclick="app.navigate('admin')">
+                            <i class="ph ph-shield-check" aria-hidden="true"></i>
+                            <span>Admin Panel</span>
+                        </a>
+                    </li>
                 </ul>
             </nav>
+            <div class="sidebar-user-info" id="sidebar-user-info">
+                <div class="user-avatar"><i class="ph ph-user"></i></div>
+                <div class="user-details">
+                    <span class="user-name" id="display-user-name">Loading...</span>
+                    <span class="user-role" id="display-user-role">writer</span>
+                </div>
+            </div>
             <div class="sidebar-footer">
+                <button class="theme-toggle mb-2" onclick="app.logout()" aria-label="Logout" style="color: var(--danger-color); border-color: var(--danger-light);">
+                    <i class="ph ph-sign-out" aria-hidden="true"></i>
+                    <span>Logout</span>
+                </button>
                 <button class="theme-toggle" id="theme-toggle" onclick="app.toggleTheme()" aria-label="Toggle Dark Mode">
                     <i class="ph ph-moon" aria-hidden="true"></i>
                     <span>Dark Mode</span>
@@ -273,6 +329,67 @@
                         </button>
                     </div>
                 </form>
+            </section>
+
+            <!-- Admin View -->
+            <section id="view-admin" class="view-section" style="display: none;" aria-label="Admin Panel">
+                <!-- Admin Stats -->
+                <div class="stats-grid" aria-label="Statistik Admin">
+                    <div class="stat-card">
+                        <div class="stat-icon" aria-hidden="true"><i class="ph ph-users"></i></div>
+                        <div class="stat-info">
+                            <h3>Total Pengguna</h3>
+                            <p id="admin-total-users">0</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon" aria-hidden="true"><i class="ph ph-files"></i></div>
+                        <div class="stat-info">
+                            <h3>Total Seluruh Laporan</h3>
+                            <p id="admin-total-reports">0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- User Management -->
+                <div class="form-card mt-3">
+                    <h2><i class="ph ph-shield-check" aria-hidden="true"></i> Manajemen Role Pengguna</h2>
+                    <div class="table-responsive">
+                        <table class="dynamic-table" id="table-users" aria-label="Tabel Pengguna">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Nama</th>
+                                    <th scope="col">Email</th>
+                                    <th scope="col">Role Saat Ini</th>
+                                    <th scope="col" class="action-col">Ubah Role</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Users injected via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- All Reports Overview -->
+                <div class="form-card">
+                    <h2><i class="ph ph-files" aria-hidden="true"></i> Semua Laporan</h2>
+                    <div class="table-responsive">
+                        <table class="dynamic-table" id="table-all-reports" aria-label="Tabel Semua Laporan">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Penulis</th>
+                                    <th scope="col">Periode</th>
+                                    <th scope="col">Ringkasan</th>
+                                    <th scope="col" class="action-col">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- All reports injected via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </section>
 
             <!-- Print/Export Template (Hidden) -->

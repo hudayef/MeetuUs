@@ -1,25 +1,28 @@
 /**
  * Laporan Bulanan Content Writer
- * Main Application Logic - Modular & Optimized (2026 SaaS Standard)
+ * Main Application Logic - Modular & Optimized with Supabase
  */
 
-const Storage = {
-    REPORTS_KEY: 'cw_reports_v2',
-    DRAFT_KEY: 'cw_draft_v2',
-    THEME_KEY: 'cw_theme_v2',
+// =========================================
+// SUPABASE CONFIGURATION
+// =========================================
+// GANTI VALUE DI BAWAH INI DENGAN PROJECT URL & ANON KEY DARI SUPABASE ANDA
+const SUPABASE_URL = 'https://YOUR_PROJECT_ID.supabase.co';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
 
-    getReports() {
-        try {
-            const data = localStorage.getItem(this.REPORTS_KEY);
-            return data ? JSON.parse(data) : [];
-        } catch (e) {
-            console.error("Failed to parse reports from localStorage", e);
-            return [];
-        }
+// Initialize Supabase Client
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const Storage = {
+    THEME_KEY: 'cw_theme_v2',
+    DRAFT_KEY: 'cw_draft_v2',
+
+    getTheme() {
+        return localStorage.getItem(this.THEME_KEY) || 'light';
     },
 
-    saveReports(reports) {
-        localStorage.setItem(this.REPORTS_KEY, JSON.stringify(reports));
+    setTheme(theme) {
+        localStorage.setItem(this.THEME_KEY, theme);
     },
 
     saveDraft(data) {
@@ -31,29 +34,16 @@ const Storage = {
             const draft = localStorage.getItem(this.DRAFT_KEY);
             return draft ? JSON.parse(draft) : null;
         } catch (e) {
-            console.error("Failed to parse draft from localStorage", e);
             return null;
         }
     },
 
     clearDraft() {
         localStorage.removeItem(this.DRAFT_KEY);
-    },
-
-    getTheme() {
-        return localStorage.getItem(this.THEME_KEY) || 'light';
-    },
-
-    setTheme(theme) {
-        localStorage.setItem(this.THEME_KEY, theme);
     }
 };
 
 const Utils = {
-    generateId() {
-        return 'rep_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-    },
-
     formatMonth(monthStr) {
         if (!monthStr) return '-';
         const [year, month] = monthStr.split('-');
@@ -75,6 +65,7 @@ const Utils = {
     },
 
     formatTextForHTML(str) {
+        if (!str) return '';
         return this.escapeHTML(str).replace(/\n/g, '<br>');
     }
 };
@@ -101,22 +92,26 @@ const UI = {
 
     setTheme(theme) {
         document.documentElement.setAttribute('data-theme', theme);
-        const toggleBtn = document.getElementById('theme-toggle');
-        if(theme === 'dark') {
-            toggleBtn.innerHTML = '<i class="ph ph-sun"></i><span>Light Mode</span>';
-        } else {
-            toggleBtn.innerHTML = '<i class="ph ph-moon"></i><span>Dark Mode</span>';
-        }
+        const toggleBtns = document.querySelectorAll('.theme-toggle');
+        toggleBtns.forEach(toggleBtn => {
+            if (!toggleBtn.hasAttribute('aria-label') || toggleBtn.getAttribute('aria-label') !== 'Logout') {
+                if(theme === 'dark') {
+                    toggleBtn.innerHTML = '<i class="ph ph-sun"></i><span>Light Mode</span>';
+                } else {
+                    toggleBtn.innerHTML = '<i class="ph ph-moon"></i><span>Dark Mode</span>';
+                }
+            }
+        });
     },
 
     navigate(view) {
-        const targetId = view === 'dashboard' ? 'view-dashboard' : 'view-form';
+        const targetId = view === 'dashboard' ? 'view-dashboard' : (view === 'form' ? 'view-form' : 'view-admin');
 
         // Hide all views
         document.querySelectorAll('.view-section').forEach(el => {
             if (el.id !== targetId) {
                 el.classList.remove('active');
-                setTimeout(() => el.style.display = 'none', 300); // Wait for fade out
+                setTimeout(() => { if(!el.classList.contains('active')) el.style.display = 'none'; }, 300);
             }
         });
 
@@ -124,27 +119,25 @@ const UI = {
         document.querySelectorAll('.sidebar-nav li').forEach(el => el.classList.remove('active'));
 
         setTimeout(() => {
-            if (view === 'dashboard') {
-                const dashboardView = document.getElementById('view-dashboard');
-                dashboardView.style.display = 'block';
-                // Trigger reflow for animation
-                void dashboardView.offsetWidth;
-                dashboardView.classList.add('active');
+            const targetView = document.getElementById(targetId);
+            if (targetView) {
+                targetView.style.display = 'block';
+                void targetView.offsetWidth; // trigger reflow
+                targetView.classList.add('active');
+            }
 
+            if (view === 'dashboard') {
                 document.getElementById('nav-dashboard').classList.add('active');
                 document.getElementById('page-title').textContent = 'Dashboard';
                 document.getElementById('btn-header-create').style.display = 'inline-flex';
             } else if (view === 'form') {
-                const formView = document.getElementById('view-form');
-                formView.style.display = 'block';
-                // Trigger reflow for animation
-                void formView.offsetWidth;
-                formView.classList.add('active');
-
                 document.getElementById('nav-create').classList.add('active');
-
                 const isEdit = document.getElementById('report-id').value !== '';
                 document.getElementById('page-title').textContent = isEdit ? 'Edit Laporan' : 'Buat Laporan Baru';
+                document.getElementById('btn-header-create').style.display = 'none';
+            } else if (view === 'admin') {
+                document.getElementById('nav-admin').classList.add('active');
+                document.getElementById('page-title').textContent = 'Admin Dashboard';
                 document.getElementById('btn-header-create').style.display = 'none';
             }
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -154,18 +147,34 @@ const UI = {
 
 const app = {
     reports: [],
+    allReports: [], // for admin
+    allUsers: [], // for admin
     currentTheme: 'light',
+    user: null,
+    profile: null,
+    isLoginMode: true,
 
-    init() {
-        this.reports = Storage.getReports();
+    async init() {
         this.currentTheme = Storage.getTheme();
-
         UI.setTheme(this.currentTheme);
-        this.renderDashboard();
-        UI.navigate('dashboard');
-
-        // Setup Event Listeners
         this.setupListeners();
+
+        // Check Auth Session
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+            await this.handleUserLogin(session.user);
+        } else {
+            this.showAuth();
+        }
+
+        // Listen for auth changes
+        supabase.auth.onAuthStateChange(async (event, session) => {
+            if (event === 'SIGNED_IN') {
+                await this.handleUserLogin(session.user);
+            } else if (event === 'SIGNED_OUT') {
+                this.handleUserLogout();
+            }
+        });
     },
 
     setupListeners() {
@@ -183,6 +192,103 @@ const app = {
             clearTimeout(timeout);
             timeout = setTimeout(later, wait);
         };
+    },
+
+    // =========================================
+    // AUTHENTICATION LOGIC
+    // =========================================
+    showAuth() {
+        document.getElementById('auth-overlay').style.display = 'flex';
+        document.getElementById('app-main-container').style.display = 'none';
+    },
+
+    hideAuth() {
+        document.getElementById('auth-overlay').style.display = 'none';
+        document.getElementById('app-main-container').style.display = 'flex';
+    },
+
+    toggleAuthMode() {
+        this.isLoginMode = !this.isLoginMode;
+        document.getElementById('group-fullname').style.display = this.isLoginMode ? 'none' : 'flex';
+        document.getElementById('btn-auth-submit').textContent = this.isLoginMode ? 'Login' : 'Daftar';
+        document.getElementById('auth-subtitle').textContent = this.isLoginMode ? 'Login untuk mengakses dashboard Anda' : 'Buat akun baru untuk mulai membuat laporan';
+        document.getElementById('auth-toggle-text').innerHTML = this.isLoginMode ?
+            'Belum punya akun? <a href="#" onclick="app.toggleAuthMode()">Daftar di sini</a>' :
+            'Sudah punya akun? <a href="#" onclick="app.toggleAuthMode()">Login di sini</a>';
+    },
+
+    async handleAuth(e) {
+        e.preventDefault();
+        const email = document.getElementById('auth-email').value;
+        const password = document.getElementById('auth-password').value;
+        const fullName = document.getElementById('auth-fullname').value;
+        const btn = document.getElementById('btn-auth-submit');
+
+        btn.disabled = true;
+        btn.textContent = 'Memproses...';
+
+        try {
+            if (this.isLoginMode) {
+                const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+                if (error) throw error;
+                UI.showToast('Login berhasil', 'success');
+            } else {
+                const { data, error } = await supabase.auth.signUp({
+                    email,
+                    password,
+                    options: { data: { full_name: fullName } }
+                });
+                if (error) throw error;
+                UI.showToast('Pendaftaran berhasil. Silakan login.', 'success');
+                if(!data.session) this.toggleAuthMode(); // Wait for email confirmation if enabled
+            }
+        } catch (error) {
+            UI.showToast(error.message, 'error');
+            btn.disabled = false;
+            btn.textContent = this.isLoginMode ? 'Login' : 'Daftar';
+        }
+    },
+
+    async handleUserLogin(user) {
+        this.user = user;
+        this.hideAuth();
+
+        // Fetch User Profile (Role)
+        const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single();
+
+        if (profile) {
+            this.profile = profile;
+            document.getElementById('display-user-name').textContent = profile.full_name || user.email;
+            document.getElementById('display-user-role').textContent = profile.role;
+
+            // Show Admin Menu if admin
+            if (profile.role === 'admin') {
+                document.getElementById('nav-admin').style.display = 'flex';
+            } else {
+                document.getElementById('nav-admin').style.display = 'none';
+            }
+        }
+
+        await this.loadReports();
+        this.navigate('dashboard');
+    },
+
+    async logout() {
+        await supabase.auth.signOut();
+    },
+
+    handleUserLogout() {
+        this.user = null;
+        this.profile = null;
+        this.reports = [];
+        this.showAuth();
+        document.getElementById('auth-form').reset();
+        document.getElementById('btn-auth-submit').disabled = false;
+        document.getElementById('btn-auth-submit').textContent = 'Login';
     },
 
     toggleTheme() {
@@ -207,12 +313,31 @@ const app = {
         UI.navigate(view);
         if(view === 'dashboard'){
             this.renderDashboard();
+        } else if (view === 'admin' && this.profile && this.profile.role === 'admin') {
+            this.loadAdminData();
         }
     },
 
     // =========================================
-    // Dynamic Form Logic
+    // CRUD LOGIC WITH SUPABASE
     // =========================================
+    async loadReports() {
+        try {
+            const { data, error } = await supabase
+                .from('reports')
+                .select('*')
+                .eq('user_id', this.user.id)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+            this.reports = data || [];
+            this.renderDashboard();
+        } catch (error) {
+            UI.showToast('Gagal memuat laporan', 'error');
+            console.error(error);
+        }
+    },
+
     addTargetRow(data = { target: '', pencapaian: '', status: 'Tercapai' }) {
         const tbody = document.querySelector('#table-target tbody');
         const tr = document.createElement('tr');
@@ -265,7 +390,8 @@ const app = {
         }));
 
         return {
-            id: document.getElementById('report-id').value,
+            id: document.getElementById('report-id').value || null,
+            user_id: this.user.id,
             nama: document.getElementById('nama').value,
             posisi: document.getElementById('posisi').value,
             divisi: document.getElementById('divisi').value,
@@ -281,28 +407,23 @@ const app = {
             eval_kelebihan: document.getElementById('eval_kelebihan').value,
             eval_peningkatan: document.getElementById('eval_peningkatan').value,
             rencana: document.getElementById('rencana').value,
-            penutup: document.getElementById('penutup').value,
-            timestamp: new Date().toISOString()
+            penutup: document.getElementById('penutup').value
         };
     },
 
     fillForm(data) {
         if(!data) return;
 
-        const fields = ['report-id', 'nama', 'posisi', 'divisi', 'periode', 'atasan', 'ringkasan',
+        const fields = ['nama', 'posisi', 'divisi', 'periode', 'atasan', 'ringkasan',
                        'detail_website', 'detail_socmed', 'detail_riset', 'pencapaian_utama',
                        'eval_kelebihan', 'eval_peningkatan', 'rencana', 'penutup'];
 
+        document.getElementById('report-id').value = data.id || '';
         fields.forEach(field => {
             const el = document.getElementById(field);
-            if(el) {
-                // map report-id to id
-                const dataKey = field === 'report-id' ? 'id' : field;
-                el.value = data[dataKey] || '';
-            }
+            if(el) el.value = data[field] || '';
         });
 
-        // Fill Tables
         const targetBody = document.querySelector('#table-target tbody');
         targetBody.innerHTML = '';
         if (data.targets && data.targets.length > 0) {
@@ -330,11 +451,8 @@ const app = {
     },
 
     autoSaveDraft() {
-        // Don't auto-save if editing an existing report
         if (document.getElementById('report-id').value) return;
-
         const data = this.getFormData();
-        // Check if there's actual data to save
         if(data.nama || data.periode || data.ringkasan) {
             Storage.saveDraft(data);
         }
@@ -350,52 +468,67 @@ const app = {
         }
     },
 
-    saveReport(event) {
+    async saveReport(event) {
         event.preventDefault();
         const data = this.getFormData();
+        const submitBtn = event.target.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
 
-        if (data.id) {
-            // Update
-            const index = this.reports.findIndex(r => r.id === data.id);
-            if (index !== -1) {
-                this.reports[index] = data;
+        try {
+            if (data.id) {
+                // Update
+                const { error } = await supabase.from('reports').update(data).eq('id', data.id);
+                if (error) throw error;
                 UI.showToast('Laporan berhasil diperbarui', 'success');
+            } else {
+                // Insert
+                delete data.id; // supabase auto generates UUID
+                const { error } = await supabase.from('reports').insert([data]);
+                if (error) throw error;
+                UI.showToast('Laporan baru berhasil disimpan', 'success');
             }
-        } else {
-            // Create
-            data.id = Utils.generateId();
-            this.reports.unshift(data);
-            UI.showToast('Laporan baru berhasil disimpan', 'success');
-        }
 
-        Storage.saveReports(this.reports);
-        Storage.clearDraft();
-        this.resetForm();
-        this.navigate('dashboard');
+            Storage.clearDraft();
+            this.resetForm();
+            await this.loadReports();
+            this.navigate('dashboard');
+        } catch (error) {
+            UI.showToast('Gagal menyimpan laporan: ' + error.message, 'error');
+        } finally {
+            submitBtn.disabled = false;
+        }
     },
 
     editReport(id) {
-        const report = this.reports.find(r => r.id === id);
+        const report = this.reports.find(r => r.id === id) || this.allReports.find(r => r.id === id);
         if (report) {
             this.fillForm(report);
             this.navigate('form');
         }
     },
 
-    deleteReport(id) {
+    async deleteReport(id) {
         if (confirm('Apakah Anda yakin ingin menghapus laporan ini? Tindakan ini tidak dapat dibatalkan.')) {
-            this.reports = this.reports.filter(r => r.id !== id);
-            Storage.saveReports(this.reports);
-            this.renderDashboard();
-            UI.showToast('Laporan berhasil dihapus', 'success');
+            try {
+                const { error } = await supabase.from('reports').delete().eq('id', id);
+                if (error) throw error;
+                UI.showToast('Laporan berhasil dihapus', 'success');
+                await this.loadReports();
+
+                // If in admin view, refresh admin data too
+                if (document.getElementById('view-admin').classList.contains('active')) {
+                    this.loadAdminData();
+                }
+            } catch (error) {
+                UI.showToast('Gagal menghapus laporan', 'error');
+            }
         }
     },
 
     // =========================================
-    // Dashboard Rendering
+    // DASHBOARD & ADMIN RENDER LOGIC
     // =========================================
     renderDashboard() {
-        // Update Stats
         document.getElementById('stat-total-reports').textContent = this.reports.length;
         document.getElementById('stat-latest-report').textContent =
             this.reports.length > 0 ? Utils.formatMonth(this.reports[0].periode) : '-';
@@ -456,8 +589,77 @@ const app = {
         }
     },
 
+    async loadAdminData() {
+        try {
+            // Fetch Users
+            const { data: users, error: errUser } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+            if (errUser) throw errUser;
+            this.allUsers = users;
+            document.getElementById('admin-total-users').textContent = users.length;
+
+            const userBody = document.querySelector('#table-users tbody');
+            userBody.innerHTML = '';
+            users.forEach(u => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${Utils.escapeHTML(u.full_name || '-')}</td>
+                    <td>${Utils.escapeHTML(u.email || '-')}</td>
+                    <td><span style="padding: 4px 8px; border-radius: 4px; background: ${u.role === 'admin' ? 'var(--primary-light)' : 'var(--bg-element)'}; color: ${u.role === 'admin' ? 'var(--primary-color)' : 'var(--text-secondary)'}; font-size: 0.8rem; font-weight: 600;">${u.role}</span></td>
+                    <td class="action-col">
+                        <select onchange="app.changeUserRole('${u.id}', this.value)" style="padding: 4px; border-radius: 4px;">
+                            <option value="writer" ${u.role === 'writer' ? 'selected' : ''}>Writer</option>
+                            <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
+                        </select>
+                    </td>
+                `;
+                userBody.appendChild(tr);
+            });
+
+            // Fetch All Reports
+            const { data: reports, error: errRep } = await supabase.from('reports').select('*, profiles(full_name)').order('created_at', { ascending: false });
+            if (errRep) throw errRep;
+            this.allReports = reports;
+            document.getElementById('admin-total-reports').textContent = reports.length;
+
+            const repBody = document.querySelector('#table-all-reports tbody');
+            repBody.innerHTML = '';
+            reports.forEach(r => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${Utils.escapeHTML(r.nama)}</td>
+                    <td>${Utils.formatMonth(r.periode)}</td>
+                    <td><div style="max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${Utils.escapeHTML(r.ringkasan)}</div></td>
+                    <td class="action-col">
+                         <button class="btn-icon" style="display:inline-flex; padding: 4px;" title="Lihat/Edit" onclick="app.editReport('${r.id}')"><i class="ph ph-eye"></i></button>
+                    </td>
+                `;
+                repBody.appendChild(tr);
+            });
+
+        } catch (error) {
+            UI.showToast('Gagal memuat data admin', 'error');
+        }
+    },
+
+    async changeUserRole(userId, newRole) {
+        if(userId === this.user.id) {
+            UI.showToast('Tidak bisa mengubah role Anda sendiri', 'error');
+            this.loadAdminData(); // reset select
+            return;
+        }
+
+        try {
+            const { error } = await supabase.from('profiles').update({ role: newRole }).eq('id', userId);
+            if(error) throw error;
+            UI.showToast('Role berhasil diubah', 'success');
+            this.loadAdminData();
+        } catch(error) {
+            UI.showToast('Gagal mengubah role', 'error');
+        }
+    },
+
     // =========================================
-    // Export and Print
+    // EXPORT AND PRINT LOGIC
     // =========================================
     generateHTMLContent(report) {
         const buildRows = (items, cols) => items.map(item =>
@@ -516,7 +718,7 @@ const app = {
     },
 
     printReport(id) {
-        const report = this.reports.find(r => r.id === id);
+        const report = this.reports.find(r => r.id === id) || this.allReports.find(r => r.id === id);
         if (!report) return;
 
         const printTemplate = document.getElementById('print-template');
@@ -527,7 +729,7 @@ const app = {
     },
 
     exportWord(id) {
-        const report = this.reports.find(r => r.id === id);
+        const report = this.reports.find(r => r.id === id) || this.allReports.find(r => r.id === id);
         if (!report) return;
 
         const header = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
@@ -549,7 +751,6 @@ const app = {
             const blob = new Blob(['\ufeff', sourceHTML], { type: 'application/msword' });
             const fileName = `Laporan_Bulanan_${report.nama.replace(/\s+/g, '_')}_${report.periode}.doc`;
 
-            // Using FileSaver.js which is included in index.html
             saveAs(blob, fileName);
             UI.showToast('Laporan berhasil di-export ke DOC', 'success');
         } catch (e) {
@@ -559,5 +760,4 @@ const app = {
     }
 };
 
-// Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => app.init());
