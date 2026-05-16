@@ -19,7 +19,7 @@ if (isSupabaseConfigured) {
 }
 
 const Storage = {
-    REPORTS_KEY: 'cw_reports_v2',
+    REPORTS_KEY: 'cw_reports',
     THEME_KEY: 'cw_theme_v2',
     DRAFT_KEY: 'cw_draft_v2',
 
@@ -261,15 +261,31 @@ const app = {
 
     async handleAuth(e) {
         e.preventDefault();
-        if (!isSupabaseConfigured) return;
 
         const email = document.getElementById('auth-email').value;
         const password = document.getElementById('auth-password').value;
-        const fullName = document.getElementById('auth-fullname').value;
+        const fullName = document.getElementById('auth-fullname').value || email.split('@')[0];
         const btn = document.getElementById('btn-auth-submit');
 
         btn.disabled = true;
         btn.textContent = 'Memproses...';
+
+        if (!isSupabaseConfigured) {
+            // Fallback Local Mode logic
+            setTimeout(async () => {
+                UI.showToast(this.isLoginMode ? 'Login Local berhasil' : 'Pendaftaran Local berhasil', 'success');
+                this.hideAuth();
+                this.user = { id: 'local_user_' + Date.now() };
+                this.profile = { full_name: fullName, role: 'admin' };
+                document.getElementById('display-user-name').textContent = fullName;
+                document.getElementById('display-user-role').textContent = 'admin';
+                document.getElementById('nav-admin').style.display = 'flex';
+
+                await this.loadReports();
+                this.navigate('dashboard');
+            }, 800);
+            return;
+        }
 
         try {
             if (this.isLoginMode) {
@@ -283,6 +299,14 @@ const app = {
                     options: { data: { full_name: fullName } }
                 });
                 if (error) throw error;
+
+                if (data?.user?.identities?.length === 0) {
+                     UI.showToast('Email sudah terdaftar. Silakan login.', 'error');
+                     btn.disabled = false;
+                     btn.textContent = 'Daftar';
+                     return;
+                }
+
                 UI.showToast('Pendaftaran berhasil. Silakan login.', 'success');
                 if(!data.session) this.toggleAuthMode(); // Wait for email confirmation if enabled
             }
