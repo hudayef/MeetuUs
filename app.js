@@ -7,19 +7,13 @@
 // SUPABASE CONFIGURATION
 // =========================================
 // GANTI VALUE DI BAWAH INI DENGAN PROJECT URL & ANON KEY DARI SUPABASE ANDA
-const SUPABASE_URL = 'https://YOUR_PROJECT_ID.supabase.co';
-const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+const SUPABASE_URL = 'https://pvuortefdvpseedroctw.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_6OLuITMEiE5u0TSqIQGlqw_LO_tvSg_';
 
-const isSupabaseConfigured = SUPABASE_URL !== 'https://YOUR_PROJECT_ID.supabase.co';
-
-// Initialize Supabase Client ONLY if configured
-let supabaseClient = null;
-if (isSupabaseConfigured) {
-    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-}
+// Initialize Supabase Client
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const Storage = {
-    REPORTS_KEY: 'cw_reports',
     THEME_KEY: 'cw_theme_v2',
     DRAFT_KEY: 'cw_draft_v2',
 
@@ -46,27 +40,10 @@ const Storage = {
 
     clearDraft() {
         localStorage.removeItem(this.DRAFT_KEY);
-    },
-
-    // Fallback LocalStorage CRUD when Supabase is not configured
-    getReportsFallback() {
-        try {
-            const data = localStorage.getItem(this.REPORTS_KEY);
-            return data ? JSON.parse(data) : [];
-        } catch (e) {
-            return [];
-        }
-    },
-
-    saveReportsFallback(reports) {
-        localStorage.setItem(this.REPORTS_KEY, JSON.stringify(reports));
     }
 };
 
 const Utils = {
-    generateId() {
-        return 'rep_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-    },
     formatMonth(monthStr) {
         if (!monthStr) return '-';
         const [year, month] = monthStr.split('-');
@@ -130,46 +107,41 @@ const UI = {
     navigate(view) {
         const targetId = view === 'dashboard' ? 'view-dashboard' : (view === 'form' ? 'view-form' : 'view-admin');
 
-        // Ensure the target is fully visible immediately
-        const targetView = document.getElementById(targetId);
-        if (targetView) {
-            targetView.style.display = 'block';
-            void targetView.offsetWidth; // trigger reflow
-            targetView.classList.add('active');
-        }
-
-        // Hide all OTHER views
+        // Hide all views
         document.querySelectorAll('.view-section').forEach(el => {
             if (el.id !== targetId) {
                 el.classList.remove('active');
-                el.style.display = 'none'; // Set display none immediately to avoid layout issues during playwright test
+                setTimeout(() => { if(!el.classList.contains('active')) el.style.display = 'none'; }, 300);
             }
         });
 
         // Update nav links
         document.querySelectorAll('.sidebar-nav li').forEach(el => el.classList.remove('active'));
 
-        if (view === 'dashboard') {
-            const navDash = document.getElementById('nav-dashboard');
-            if(navDash) navDash.classList.add('active');
-            document.getElementById('page-title').textContent = 'Dashboard';
-            const btnCreate = document.getElementById('btn-header-create');
-            if(btnCreate) btnCreate.style.display = 'inline-flex';
-        } else if (view === 'form') {
-            const navCreate = document.getElementById('nav-create');
-            if(navCreate) navCreate.classList.add('active');
-            const isEdit = document.getElementById('report-id').value !== '';
-            document.getElementById('page-title').textContent = isEdit ? 'Edit Laporan' : 'Buat Laporan Baru';
-            const btnCreate = document.getElementById('btn-header-create');
-            if(btnCreate) btnCreate.style.display = 'none';
-        } else if (view === 'admin') {
-            const navAdmin = document.getElementById('nav-admin');
-            if(navAdmin) navAdmin.classList.add('active');
-            document.getElementById('page-title').textContent = 'Admin Dashboard';
-            const btnCreate = document.getElementById('btn-header-create');
-            if(btnCreate) btnCreate.style.display = 'none';
-        }
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        setTimeout(() => {
+            const targetView = document.getElementById(targetId);
+            if (targetView) {
+                targetView.style.display = 'block';
+                void targetView.offsetWidth; // trigger reflow
+                targetView.classList.add('active');
+            }
+
+            if (view === 'dashboard') {
+                document.getElementById('nav-dashboard').classList.add('active');
+                document.getElementById('page-title').textContent = 'Dashboard';
+                document.getElementById('btn-header-create').style.display = 'inline-flex';
+            } else if (view === 'form') {
+                document.getElementById('nav-create').classList.add('active');
+                const isEdit = document.getElementById('report-id').value !== '';
+                document.getElementById('page-title').textContent = isEdit ? 'Edit Laporan' : 'Buat Laporan Baru';
+                document.getElementById('btn-header-create').style.display = 'none';
+            } else if (view === 'admin') {
+                document.getElementById('nav-admin').classList.add('active');
+                document.getElementById('page-title').textContent = 'Admin Dashboard';
+                document.getElementById('btn-header-create').style.display = 'none';
+            }
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }, 30);
     }
 };
 
@@ -187,36 +159,22 @@ const app = {
         UI.setTheme(this.currentTheme);
         this.setupListeners();
 
-        if (isSupabaseConfigured) {
-            // Check Auth Session
-            const { data: { session } } = await supabaseClient.auth.getSession();
-            if (session) {
-                await this.handleUserLogin(session.user);
-            } else {
-                this.showAuth();
-            }
-
-            // Listen for auth changes
-            supabaseClient.auth.onAuthStateChange(async (event, session) => {
-                if (event === 'SIGNED_IN') {
-                    await this.handleUserLogin(session.user);
-                } else if (event === 'SIGNED_OUT') {
-                    this.handleUserLogout();
-                }
-            });
+        // Check Auth Session
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+            await this.handleUserLogin(session.user);
         } else {
-            // Fallback Mode: Skip Auth, grant pseudo-admin
-            console.warn("Supabase not configured. Falling back to LocalStorage mode.");
-            this.hideAuth();
-            this.user = { id: 'local_user' };
-            this.profile = { full_name: 'Local User', role: 'admin' };
-            document.getElementById('display-user-name').textContent = 'Local Mode';
-            document.getElementById('display-user-role').textContent = 'admin';
-            document.getElementById('nav-admin').style.display = 'flex';
-
-            await this.loadReports();
-            this.navigate('dashboard');
+            this.showAuth();
         }
+
+        // Listen for auth changes
+        supabase.auth.onAuthStateChange(async (event, session) => {
+            if (event === 'SIGNED_IN') {
+                await this.handleUserLogin(session.user);
+            } else if (event === 'SIGNED_OUT') {
+                this.handleUserLogout();
+            }
+        });
     },
 
     setupListeners() {
@@ -261,52 +219,26 @@ const app = {
 
     async handleAuth(e) {
         e.preventDefault();
-
         const email = document.getElementById('auth-email').value;
         const password = document.getElementById('auth-password').value;
-        const fullName = document.getElementById('auth-fullname').value || email.split('@')[0];
+        const fullName = document.getElementById('auth-fullname').value;
         const btn = document.getElementById('btn-auth-submit');
 
         btn.disabled = true;
         btn.textContent = 'Memproses...';
 
-        if (!isSupabaseConfigured) {
-            // Fallback Local Mode logic
-            setTimeout(async () => {
-                UI.showToast(this.isLoginMode ? 'Login Local berhasil' : 'Pendaftaran Local berhasil', 'success');
-                this.hideAuth();
-                this.user = { id: 'local_user_' + Date.now() };
-                this.profile = { full_name: fullName, role: 'admin' };
-                document.getElementById('display-user-name').textContent = fullName;
-                document.getElementById('display-user-role').textContent = 'admin';
-                document.getElementById('nav-admin').style.display = 'flex';
-
-                await this.loadReports();
-                this.navigate('dashboard');
-            }, 800);
-            return;
-        }
-
         try {
             if (this.isLoginMode) {
-                const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+                const { data, error } = await supabase.auth.signInWithPassword({ email, password });
                 if (error) throw error;
                 UI.showToast('Login berhasil', 'success');
             } else {
-                const { data, error } = await supabaseClient.auth.signUp({
+                const { data, error } = await supabase.auth.signUp({
                     email,
                     password,
                     options: { data: { full_name: fullName } }
                 });
                 if (error) throw error;
-
-                if (data?.user?.identities?.length === 0) {
-                     UI.showToast('Email sudah terdaftar. Silakan login.', 'error');
-                     btn.disabled = false;
-                     btn.textContent = 'Daftar';
-                     return;
-                }
-
                 UI.showToast('Pendaftaran berhasil. Silakan login.', 'success');
                 if(!data.session) this.toggleAuthMode(); // Wait for email confirmation if enabled
             }
@@ -322,7 +254,8 @@ const app = {
         this.hideAuth();
 
         // Fetch User Profile (Role)
-        const { data: profile, error } = await supabaseClient.from('profiles')
+        const { data: profile, error } = await supabase
+            .from('profiles')
             .select('*')
             .eq('id', user.id)
             .single();
@@ -345,11 +278,7 @@ const app = {
     },
 
     async logout() {
-        if (isSupabaseConfigured) {
-            await supabaseClient.auth.signOut();
-        } else {
-            UI.showToast('Fungsi logout dinonaktifkan di mode LocalStorage', 'warning');
-        }
+        await supabase.auth.signOut();
     },
 
     handleUserLogout() {
@@ -390,26 +319,22 @@ const app = {
     },
 
     // =========================================
-    // CRUD LOGIC WITH SUPABASE / FALLBACK
+    // CRUD LOGIC WITH SUPABASE
     // =========================================
     async loadReports() {
-        if (isSupabaseConfigured) {
-            try {
-                const { data, error } = await supabaseClient.from('reports')
-                    .select('*')
-                    .eq('user_id', this.user.id)
-                    .order('created_at', { ascending: false });
+        try {
+            const { data, error } = await supabase
+                .from('reports')
+                .select('*')
+                .eq('user_id', this.user.id)
+                .order('created_at', { ascending: false });
 
-                if (error) throw error;
-                this.reports = data || [];
-                this.renderDashboard();
-            } catch (error) {
-                UI.showToast('Gagal memuat laporan', 'error');
-                console.error(error);
-            }
-        } else {
-            this.reports = Storage.getReportsFallback();
+            if (error) throw error;
+            this.reports = data || [];
             this.renderDashboard();
+        } catch (error) {
+            UI.showToast('Gagal memuat laporan', 'error');
+            console.error(error);
         }
     },
 
@@ -474,9 +399,9 @@ const app = {
             atasan: document.getElementById('atasan').value,
             ringkasan: document.getElementById('ringkasan').value,
             targets,
-            tugas_utama: document.getElementById('tugas_utama').value,
-            tugas_tambahan: document.getElementById('tugas_tambahan').value,
-            keterangan_lain: document.getElementById('keterangan_lain').value,
+            detail_website: document.getElementById('detail_website').value,
+            detail_socmed: document.getElementById('detail_socmed').value,
+            detail_riset: document.getElementById('detail_riset').value,
             pencapaian_utama: document.getElementById('pencapaian_utama').value,
             kendalas,
             eval_kelebihan: document.getElementById('eval_kelebihan').value,
@@ -490,7 +415,7 @@ const app = {
         if(!data) return;
 
         const fields = ['nama', 'posisi', 'divisi', 'periode', 'atasan', 'ringkasan',
-                       'tugas_utama', 'tugas_tambahan', 'keterangan_lain', 'pencapaian_utama',
+                       'detail_website', 'detail_socmed', 'detail_riset', 'pencapaian_utama',
                        'eval_kelebihan', 'eval_peningkatan', 'rencana', 'penutup'];
 
         document.getElementById('report-id').value = data.id || '';
@@ -550,33 +475,17 @@ const app = {
         submitBtn.disabled = true;
 
         try {
-            if (isSupabaseConfigured) {
-                if (data.id) {
-                    // Update
-                    const { error } = await supabaseClient.from('reports').update(data).eq('id', data.id);
-                    if (error) throw error;
-                    UI.showToast('Laporan berhasil diperbarui', 'success');
-                } else {
-                    // Insert
-                    delete data.id; // supabase auto generates UUID
-                    const { error } = await supabaseClient.from('reports').insert([data]);
-                    if (error) throw error;
-                    UI.showToast('Laporan baru berhasil disimpan', 'success');
-                }
+            if (data.id) {
+                // Update
+                const { error } = await supabase.from('reports').update(data).eq('id', data.id);
+                if (error) throw error;
+                UI.showToast('Laporan berhasil diperbarui', 'success');
             } else {
-                // Fallback LocalStorage
-                if (data.id) {
-                    const index = this.reports.findIndex(r => r.id === data.id);
-                    if (index !== -1) {
-                        this.reports[index] = data;
-                        UI.showToast('Laporan berhasil diperbarui', 'success');
-                    }
-                } else {
-                    data.id = Utils.generateId();
-                    this.reports.unshift(data);
-                    UI.showToast('Laporan baru berhasil disimpan', 'success');
-                }
-                Storage.saveReportsFallback(this.reports);
+                // Insert
+                delete data.id; // supabase auto generates UUID
+                const { error } = await supabase.from('reports').insert([data]);
+                if (error) throw error;
+                UI.showToast('Laporan baru berhasil disimpan', 'success');
             }
 
             Storage.clearDraft();
@@ -601,14 +510,8 @@ const app = {
     async deleteReport(id) {
         if (confirm('Apakah Anda yakin ingin menghapus laporan ini? Tindakan ini tidak dapat dibatalkan.')) {
             try {
-                if (isSupabaseConfigured) {
-                    const { error } = await supabaseClient.from('reports').delete().eq('id', id);
-                    if (error) throw error;
-                } else {
-                    this.reports = this.reports.filter(r => r.id !== id);
-                    Storage.saveReportsFallback(this.reports);
-                }
-
+                const { error } = await supabase.from('reports').delete().eq('id', id);
+                if (error) throw error;
                 UI.showToast('Laporan berhasil dihapus', 'success');
                 await this.loadReports();
 
@@ -687,34 +590,9 @@ const app = {
     },
 
     async loadAdminData() {
-        if (!isSupabaseConfigured) {
-            // Mock data for fallback mode
-            document.getElementById('admin-total-users').textContent = "1";
-            const userBody = document.querySelector('#table-users tbody');
-            userBody.innerHTML = `<tr><td>Local User</td><td>local@example.com</td><td><span style="padding: 4px 8px; border-radius: 4px; background: var(--primary-light); color: var(--primary-color); font-size: 0.8rem; font-weight: 600;">admin</span></td><td>-</td></tr>`;
-
-            document.getElementById('admin-total-reports').textContent = this.reports.length;
-            this.allReports = this.reports;
-            const repBody = document.querySelector('#table-all-reports tbody');
-            repBody.innerHTML = '';
-            this.reports.forEach(r => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${Utils.escapeHTML(r.nama)}</td>
-                    <td>${Utils.formatMonth(r.periode)}</td>
-                    <td><div style="max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${Utils.escapeHTML(r.ringkasan)}</div></td>
-                    <td class="action-col">
-                         <button class="btn-icon" style="display:inline-flex; padding: 4px;" title="Lihat/Edit" onclick="app.editReport('${r.id}')"><i class="ph ph-eye"></i></button>
-                    </td>
-                `;
-                repBody.appendChild(tr);
-            });
-            return;
-        }
-
         try {
             // Fetch Users
-            const { data: users, error: errUser } = await supabaseClient.from('profiles').select('*').order('created_at', { ascending: false });
+            const { data: users, error: errUser } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
             if (errUser) throw errUser;
             this.allUsers = users;
             document.getElementById('admin-total-users').textContent = users.length;
@@ -738,7 +616,7 @@ const app = {
             });
 
             // Fetch All Reports
-            const { data: reports, error: errRep } = await supabaseClient.from('reports').select('*, profiles(full_name)').order('created_at', { ascending: false });
+            const { data: reports, error: errRep } = await supabase.from('reports').select('*, profiles(full_name)').order('created_at', { ascending: false });
             if (errRep) throw errRep;
             this.allReports = reports;
             document.getElementById('admin-total-reports').textContent = reports.length;
@@ -771,7 +649,7 @@ const app = {
         }
 
         try {
-            const { error } = await supabaseClient.from('profiles').update({ role: newRole }).eq('id', userId);
+            const { error } = await supabase.from('profiles').update({ role: newRole }).eq('id', userId);
             if(error) throw error;
             UI.showToast('Role berhasil diubah', 'success');
             this.loadAdminData();
@@ -812,10 +690,10 @@ const app = {
                     <tbody>${targetsHTML}</tbody>
                 </table>
 
-                <h2>4. Uraian Tugas & Kegiatan</h2>
-                <p><strong>Pelaksanaan Tugas Utama:</strong><br>${Utils.formatTextForHTML(report.tugas_utama)}</p>
-                <p><strong>Pelaksanaan Tugas Tambahan / Khusus:</strong><br>${Utils.formatTextForHTML(report.tugas_tambahan)}</p>
-                <p><strong>Keterangan / Laporan Tambahan:</strong><br>${Utils.formatTextForHTML(report.keterangan_lain)}</p>
+                <h2>4. Detail Pekerjaan</h2>
+                <p><strong>Content Website:</strong><br>${Utils.formatTextForHTML(report.detail_website)}</p>
+                <p><strong>Media Sosial:</strong><br>${Utils.formatTextForHTML(report.detail_socmed)}</p>
+                <p><strong>Riset dan Analisis:</strong><br>${Utils.formatTextForHTML(report.detail_riset)}</p>
 
                 <h2>5. Pencapaian Utama</h2>
                 <p>${Utils.formatTextForHTML(report.pencapaian_utama)}</p>

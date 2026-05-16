@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistem Pelaporan Kinerja Bulanan</title>
-    <meta name="description" content="Portal pelaporan kinerja bulanan untuk seluruh divisi. Manajemen laporan, export dokumen, dan rekapitulasi data.">
+    <title>Laporan Bulanan Content Writer</title>
+    <meta name="description" content="Dashboard Laporan Bulanan untuk Content Writer. Manajemen laporan, export dokumen, dan fitur auto-save.">
     <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -22,8 +22,8 @@
         <div class="auth-card glass-panel">
             <div class="auth-header">
                 <div class="logo justify-center">
-                    <i class="ph ph-buildings" aria-hidden="true"></i>
-                    <span>Portal Pelaporan</span>
+                    <i class="ph ph-files" aria-hidden="true"></i>
+                    <span>CW Report</span>
                 </div>
                 <p id="auth-subtitle">Login untuk mengakses dashboard Anda</p>
             </div>
@@ -58,8 +58,8 @@
         <aside class="sidebar" aria-label="Main Navigation">
             <div class="sidebar-header">
                 <a href="#" class="logo" aria-label="Home">
-                    <i class="ph ph-buildings" aria-hidden="true"></i>
-                    <span>Portal Pelaporan</span>
+                    <i class="ph ph-files" aria-hidden="true"></i>
+                    <span>CW Report</span>
                 </a>
             </div>
             <nav class="sidebar-nav">
@@ -189,12 +189,12 @@
                                 <input type="text" id="nama" required placeholder="Masukkan nama" aria-required="true">
                             </div>
                             <div class="form-group">
-                                <label for="posisi">Jabatan / Posisi</label>
-                                <input type="text" id="posisi" required placeholder="Contoh: Staff Utama" aria-required="true">
+                                <label for="posisi">Posisi</label>
+                                <input type="text" id="posisi" required placeholder="e.g. Content Writer" aria-required="true">
                             </div>
                             <div class="form-group">
-                                <label for="divisi">Divisi / Departemen</label>
-                                <input type="text" id="divisi" required placeholder="Contoh: Hubungan Masyarakat" aria-required="true">
+                                <label for="divisi">Divisi</label>
+                                <input type="text" id="divisi" required placeholder="e.g. Marketing" aria-required="true">
                             </div>
                             <div class="form-group">
                                 <label for="periode">Periode Laporan</label>
@@ -241,7 +241,7 @@
 
                     <!-- Section: Uraian Tugas -->
                     <div class="form-card">
-                        <h2><i class="ph ph-list-dashes" aria-hidden="true"></i> Uraian Tugas & Kegiatan</h2>
+                        <h2><i class="ph ph-list-dashes" aria-hidden="true"></i> Detail Pekerjaan</h2>
                         <div class="form-group">
                             <label for="tugas_utama">Pelaksanaan Tugas Utama</label>
                             <textarea id="tugas_utama" rows="3" required placeholder="Jelaskan secara detail pelaksanaan tugas pokok Anda..."></textarea>
