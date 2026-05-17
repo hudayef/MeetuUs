@@ -15,6 +15,18 @@ CREATE TABLE public.profiles (
 -- Enable Row Level Security (RLS) for profiles
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
+
+-- Function to check if current user is admin without triggering RLS
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS BOOLEAN AS $
+DECLARE
+  user_role TEXT;
+BEGIN
+  SELECT role INTO user_role FROM public.profiles WHERE id = auth.uid();
+  RETURN user_role = 'admin';
+END;
+$ LANGUAGE plpgsql SECURITY DEFINER;
+
 -- Profiles Policies
 -- Users can view their own profile
 CREATE POLICY "Users can view own profile" ON public.profiles
@@ -23,13 +35,13 @@ CREATE POLICY "Users can view own profile" ON public.profiles
 -- Admins can view all profiles
 CREATE POLICY "Admins can view all profiles" ON public.profiles
   FOR SELECT USING (
-    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+    public.is_admin()
   );
 
 -- Admins can update profiles (change roles)
 CREATE POLICY "Admins can update all profiles" ON public.profiles
   FOR UPDATE USING (
-    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+    public.is_admin()
   );
 
 -- Function to automatically create a profile when a new user signs up
@@ -59,9 +71,9 @@ CREATE TABLE public.reports (
   atasan text NOT NULL,
   ringkasan text,
   targets jsonb DEFAULT '[]'::jsonb,
-  detail_website text,
-  detail_socmed text,
-  detail_riset text,
+  tugas_utama text,
+  tugas_tambahan text,
+  keterangan_lain text,
   pencapaian_utama text,
   kendalas jsonb DEFAULT '[]'::jsonb,
   eval_kelebihan text,
@@ -80,7 +92,7 @@ ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can view own reports, admins view all" ON public.reports
   FOR SELECT USING (
     auth.uid() = user_id OR
-    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+    public.is_admin()
   );
 
 -- Writers can only insert their own reports
@@ -91,14 +103,14 @@ CREATE POLICY "Users can insert own reports" ON public.reports
 CREATE POLICY "Users can update own reports, admins update all" ON public.reports
   FOR UPDATE USING (
     auth.uid() = user_id OR
-    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+    public.is_admin()
   );
 
 -- Writers can only delete their own reports. Admins can delete all.
 CREATE POLICY "Users can delete own reports, admins delete all" ON public.reports
   FOR DELETE USING (
     auth.uid() = user_id OR
-    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+    public.is_admin()
   );
 
 -- Function to set updated_at
