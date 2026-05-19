@@ -7,8 +7,8 @@
 // SUPABASE CONFIGURATION
 // =========================================
 // GANTI VALUE DI BAWAH INI DENGAN PROJECT URL & ANON KEY DARI SUPABASE ANDA
-const SUPABASE_URL = 'https://pvuortefdvpseedroctw.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_6OLuITMEiE5u0TSqIQGlqw_LO_tvSg_';
+const SUPABASE_URL = 'https://qkrftwehwwzwxajuurpk.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_ELyphZsBinKDKyH6hD5ORg_YARPwtO7';
 
 // Ensure we consider it configured if it's set to ANY value, and also specifically if it is set to the provided URL (meaning user already provided the actual supabase URL).
 // Check if it's NOT a placeholder from an older version, or if it has been updated. Since the user says they connected it, we just enforce it to true if it has standard supabase format.
