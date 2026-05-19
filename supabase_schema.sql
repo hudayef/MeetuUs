@@ -128,6 +128,49 @@ BEFORE UPDATE ON public.reports
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
 
+-- 3. Create the Requests table (for Design/General requests from Admin to Writers)
+CREATE TABLE public.requests (
+  id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+  admin_id uuid REFERENCES auth.users ON DELETE CASCADE NOT NULL,
+  judul text NOT NULL,
+  deskripsi text NOT NULL,
+  tujuan text NOT NULL,
+  batas_waktu date NOT NULL,
+  status text DEFAULT 'Pending'::text CHECK (status IN ('Pending', 'Accepted', 'Rejected')),
+  handled_by uuid REFERENCES auth.users ON DELETE SET NULL,
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+  updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Enable Row Level Security (RLS) for requests
+ALTER TABLE public.requests ENABLE ROW LEVEL SECURITY;
+
+-- Requests Policies
+-- Everyone can view all requests
+CREATE POLICY "Everyone can view requests" ON public.requests
+  FOR SELECT USING (true);
+
+-- Only admins can insert requests
+CREATE POLICY "Admins can insert requests" ON public.requests
+  FOR INSERT WITH CHECK (public.is_admin());
+
+-- Admins can update any request. Writers can update requests to Accept/Reject
+CREATE POLICY "Admins update all, Writers update status" ON public.requests
+  FOR UPDATE USING (
+    public.is_admin() OR
+    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'writer')
+  );
+
+-- Only admins can delete requests
+CREATE POLICY "Admins can delete requests" ON public.requests
+  FOR DELETE USING (public.is_admin());
+
+-- Trigger for updated_at on requests
+CREATE TRIGGER set_requests_updated_at
+BEFORE UPDATE ON public.requests
+FOR EACH ROW
+EXECUTE FUNCTION set_updated_at();
+
 -- Note: The FIRST user to sign up will be a 'writer' by default.
 -- To make yourself an admin, you will need to go to the Supabase Table Editor,
 -- open the 'profiles' table, and change your role from 'writer' to 'admin'.
