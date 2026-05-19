@@ -71,7 +71,7 @@
                         </a>
                     </li>
                     <li id="nav-create">
-                        <a href="#" onclick="app.navigate('form')">
+                        <a href="#" onclick="app.startNewReport()">
                             <i class="ph ph-plus-circle" aria-hidden="true"></i>
                             <span>Buat Laporan</span>
                         </a>
@@ -110,7 +110,7 @@
             <header class="top-header">
                 <h1 id="page-title">Dashboard</h1>
                 <div class="header-actions">
-                    <button class="btn btn-primary" onclick="app.navigate('form')" id="btn-header-create" aria-label="Buat Laporan Baru">
+                    <button class="btn btn-primary" onclick="app.startNewReport()" id="btn-header-create" aria-label="Buat Laporan Baru">
                         <i class="ph ph-plus" aria-hidden="true"></i> Buat Laporan Baru
                     </button>
                 </div>
@@ -170,7 +170,7 @@
                         <i class="ph ph-folder-open" aria-hidden="true"></i>
                         <h3>Belum Ada Laporan</h3>
                         <p>Mulai buat laporan bulanan pertama Anda.</p>
-                        <button class="btn btn-primary mt-3" onclick="app.navigate('form')">Buat Laporan</button>
+                        <button class="btn btn-primary mt-3" onclick="app.startNewReport()">Buat Laporan</button>
                     </div>
                 </div>
             </section>
@@ -179,6 +179,7 @@
             <section id="view-form" class="view-section" style="display: none;" aria-label="Form Laporan">
                 <form id="report-form" onsubmit="app.saveReport(event)">
                     <input type="hidden" id="report-id">
+                    <input type="hidden" id="report-user-id">
 
                     <!-- Section: Identitas -->
                     <div class="form-card">
