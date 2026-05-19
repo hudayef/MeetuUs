@@ -18,14 +18,14 @@ ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
 -- Function to check if current user is admin without triggering RLS
 CREATE OR REPLACE FUNCTION public.is_admin()
-RETURNS BOOLEAN AS $
+RETURNS BOOLEAN AS $$
 DECLARE
   user_role TEXT;
 BEGIN
   SELECT role INTO user_role FROM public.profiles WHERE id = auth.uid();
   RETURN user_role = 'admin';
 END;
-$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Profiles Policies
 -- Users can view their own profile
