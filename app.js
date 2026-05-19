@@ -10,7 +10,7 @@
 const SUPABASE_URL = 'https://pvuortefdvpseedroctw.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_6OLuITMEiE5u0TSqIQGlqw_LO_tvSg_';
 
-const isSupabaseConfigured = SUPABASE_URL !== 'https://YOUR_PROJECT_ID.supabase.co';
+const isSupabaseConfigured = SUPABASE_URL !== 'https://pvuortefdvpseedroctw.supabase.co';
 
 // Initialize Supabase Client ONLY if configured
 let supabaseClient = null;
