@@ -541,6 +541,11 @@ const app = {
         }
     },
 
+    startNewReport() {
+        this.resetForm();
+        this.navigate('form');
+    },
+
     resetForm() {
         document.getElementById('report-form').reset();
         document.getElementById('report-id').value = '';
