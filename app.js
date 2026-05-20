@@ -7,10 +7,12 @@
 // SUPABASE CONFIGURATION
 // =========================================
 // GANTI VALUE DI BAWAH INI DENGAN PROJECT URL & ANON KEY DARI SUPABASE ANDA
-const SUPABASE_URL = 'https://pvuortefdvpseedroctw.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_6OLuITMEiE5u0TSqIQGlqw_LO_tvSg_';
+const SUPABASE_URL = 'https://qkrftwehwwzwxajuurpk.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_ELyphZsBinKDKyH6hD5ORg_YARPwtO7';
 
-const isSupabaseConfigured = SUPABASE_URL !== 'https://pvuortefdvpseedroctw.supabase.co';
+// Ensure we consider it configured if it's set to ANY value, and also specifically if it is set to the provided URL (meaning user already provided the actual supabase URL).
+// Check if it's NOT a placeholder from an older version, or if it has been updated. Since the user says they connected it, we just enforce it to true if it has standard supabase format.
+const isSupabaseConfigured = SUPABASE_URL.includes('.supabase.co') && SUPABASE_ANON_KEY.length > 20;
 
 // Initialize Supabase Client ONLY if configured
 let supabaseClient = null;
@@ -484,9 +486,11 @@ const app = {
             solusi: row.querySelector('.solusi-input').value
         }));
 
+        const existingUserId = document.getElementById('report-user-id').value;
+
         return {
             id: document.getElementById('report-id').value || null,
-            user_id: this.user.id,
+            user_id: existingUserId || this.user.id,
             nama: document.getElementById('nama').value,
             posisi: document.getElementById('posisi').value,
             divisi: document.getElementById('divisi').value,
@@ -514,6 +518,7 @@ const app = {
                        'eval_kelebihan', 'eval_peningkatan', 'rencana', 'penutup'];
 
         document.getElementById('report-id').value = data.id || '';
+        document.getElementById('report-user-id').value = data.user_id || '';
         fields.forEach(field => {
             const el = document.getElementById(field);
             if(el) el.value = data[field] || '';
@@ -544,6 +549,7 @@ const app = {
     resetForm() {
         document.getElementById('report-form').reset();
         document.getElementById('report-id').value = '';
+        document.getElementById('report-user-id').value = '';
         document.querySelector('#table-target tbody').innerHTML = '';
         document.querySelector('#table-kendala tbody').innerHTML = '';
         this.addTargetRow();
@@ -578,7 +584,9 @@ const app = {
             if (isSupabaseConfigured) {
                 if (data.id) {
                     // Update
-                    const { error } = await supabaseClient.from('reports').update(data).eq('id', data.id);
+                    const updateData = { ...data };
+                    delete updateData.id; // Ensure we don't try to update the primary key
+                    const { error } = await supabaseClient.from('reports').update(updateData).eq('id', data.id);
                     if (error) throw error;
                     UI.showToast('Laporan berhasil diperbarui', 'success');
                 } else {
@@ -621,6 +629,11 @@ const app = {
             this.fillForm(report);
             this.navigate('form');
         }
+    },
+
+    startNewReport() {
+        this.resetForm();
+        this.navigate('form');
     },
 
     async deleteReport(id) {
@@ -667,6 +680,8 @@ const app = {
         list.innerHTML = '';
 
         const filtered = this.reports.filter(report => {
+            if (!report || !report.nama || !report.periode) return false;
+
             const matchesSearch = report.nama.toLowerCase().includes(searchQuery) ||
                                   Utils.formatMonth(report.periode).toLowerCase().includes(searchQuery);
             const reportMonth = report.periode.split('-')[1];
@@ -728,8 +743,9 @@ const app = {
                     <td>${Utils.escapeHTML(r.nama)}</td>
                     <td>${Utils.formatMonth(r.periode)}</td>
                     <td><div style="max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${Utils.escapeHTML(r.ringkasan)}</div></td>
-                    <td class="action-col">
+                    <td class="action-col" style="display: flex; gap: 0.5rem; justify-content: center;">
                          <button class="btn-icon" style="display:inline-flex; padding: 4px;" title="Lihat/Edit" onclick="app.editReport('${r.id}')"><i class="ph ph-eye"></i></button>
+                         <button class="btn-icon danger" style="display:inline-flex; padding: 4px;" title="Hapus" onclick="app.deleteReport('${r.id}')"><i class="ph ph-trash"></i></button>
                     </td>
                 `;
                 repBody.appendChild(tr);
@@ -776,8 +792,9 @@ const app = {
                     <td>${Utils.escapeHTML(r.nama)}</td>
                     <td>${Utils.formatMonth(r.periode)}</td>
                     <td><div style="max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${Utils.escapeHTML(r.ringkasan)}</div></td>
-                    <td class="action-col">
+                    <td class="action-col" style="display: flex; gap: 0.5rem; justify-content: center;">
                          <button class="btn-icon" style="display:inline-flex; padding: 4px;" title="Lihat/Edit" onclick="app.editReport('${r.id}')"><i class="ph ph-eye"></i></button>
+                         <button class="btn-icon danger" style="display:inline-flex; padding: 4px;" title="Hapus" onclick="app.deleteReport('${r.id}')"><i class="ph ph-trash"></i></button>
                     </td>
                 `;
                 repBody.appendChild(tr);
@@ -813,8 +830,8 @@ const app = {
             `<tr>${cols.map(col => `<td>${Utils.escapeHTML(item[col] || '')}</td>`).join('')}</tr>`
         ).join('');
 
-        const targetsHTML = buildRows(report.targets, ['target', 'pencapaian', 'status']);
-        const kendalaHTML = buildRows(report.kendalas, ['kendala', 'dampak', 'solusi']);
+        const targetsHTML = buildRows(report.targets || [], ['target', 'pencapaian', 'status']);
+        const kendalaHTML = buildRows(report.kendalas || [], ['kendala', 'dampak', 'solusi']);
 
         return `
             <div class="print-doc">
@@ -931,7 +948,7 @@ Object.assign(app, {
             batas_waktu: document.getElementById('req-batas').value,
             deskripsi: document.getElementById('req-deskripsi').value,
             status: 'Pending', // default status matching SQL CHECK constraint
-            admin_id: (this.profile && this.profile.id) ? this.profile.id : (this.user ? this.user.id : null)
+            admin_id: this.user ? this.user.id : null
         };
 
         try {
