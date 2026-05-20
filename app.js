@@ -10,6 +10,7 @@
 const SUPABASE_URL = 'https://qkrftwehwwzwxajuurpk.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_ELyphZsBinKDKyH6hD5ORg_YARPwtO7';
 
+
 const isSupabaseConfigured = SUPABASE_URL !== 'https://pvuortefdvpseedroctw.supabase.co';
 
 // Initialize Supabase Client ONLY if configured
