@@ -90,6 +90,12 @@ const Utils = {
     formatTextForHTML(str) {
         if (!str) return '';
         return this.escapeHTML(str).replace(/\n/g, '<br>');
+    },
+
+    formatDate(dateStr) {
+        if (!dateStr) return '-';
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
     }
 };
 
@@ -128,7 +134,10 @@ const UI = {
     },
 
     navigate(view) {
-        const targetId = view === 'dashboard' ? 'view-dashboard' : (view === 'form' ? 'view-form' : 'view-admin');
+        let targetId = 'view-dashboard';
+        if (view === 'form') targetId = 'view-form';
+        if (view === 'admin') targetId = 'view-admin';
+        if (view === 'requests') targetId = 'view-requests';
 
         // Ensure the target is fully visible immediately
         const targetView = document.getElementById(targetId);
@@ -213,6 +222,8 @@ const app = {
             document.getElementById('display-user-name').textContent = 'Local Mode';
             document.getElementById('display-user-role').textContent = 'admin';
             document.getElementById('nav-admin').style.display = 'flex';
+            const navRequests = document.getElementById('nav-requests');
+            if(navRequests) navRequests.style.display = 'none';
 
             await this.loadReports();
             this.navigate('dashboard');
@@ -280,6 +291,8 @@ const app = {
                 document.getElementById('display-user-name').textContent = fullName;
                 document.getElementById('display-user-role').textContent = 'admin';
                 document.getElementById('nav-admin').style.display = 'flex';
+                const navRequests = document.getElementById('nav-requests');
+                if(navRequests) navRequests.style.display = 'none';
 
                 await this.loadReports();
                 this.navigate('dashboard');
@@ -335,8 +348,12 @@ const app = {
             // Show Admin Menu if admin
             if (profile.role === 'admin') {
                 document.getElementById('nav-admin').style.display = 'flex';
+                const navReq = document.getElementById('nav-requests');
+                if (navReq) navReq.style.display = 'none';
             } else {
                 document.getElementById('nav-admin').style.display = 'none';
+                const navReq = document.getElementById('nav-requests');
+                if (navReq) navReq.style.display = 'flex';
             }
         }
 
@@ -386,6 +403,9 @@ const app = {
             this.renderDashboard();
         } else if (view === 'admin' && this.profile && this.profile.role === 'admin') {
             this.loadAdminData();
+            if (this.loadAdminRequests) this.loadAdminRequests();
+        } else if (view === 'requests') {
+            if (this.loadRequests) this.loadRequests();
         }
     },
 
@@ -514,6 +534,11 @@ const app = {
         } else {
             this.addKendalaRow();
         }
+    },
+
+    startNewReport() {
+        this.resetForm();
+        this.navigate('form');
     },
 
     resetForm() {
@@ -883,3 +908,251 @@ const app = {
 };
 
 document.addEventListener('DOMContentLoaded', () => app.init());
+
+// =========================================
+// REQUEST LOGIC (ADMIN & WRITER)
+// =========================================
+
+Object.assign(app, {
+    async saveRequest(event) {
+        event.preventDefault();
+        const btn = event.submitter || document.querySelector('#request-form button[type="submit"]');
+        if(btn) {
+            btn.disabled = true;
+            btn.innerHTML = 'Menyimpan...';
+        }
+
+        const id = document.getElementById('req-id') ? document.getElementById('req-id').value : '';
+        const form = document.getElementById('request-form');
+
+        const newRequest = {
+            judul: document.getElementById('req-judul').value,
+            tujuan: document.getElementById('req-tujuan').value,
+            batas_waktu: document.getElementById('req-batas').value,
+            deskripsi: document.getElementById('req-deskripsi').value,
+            status: 'Pending', // default status matching SQL CHECK constraint
+            admin_id: (this.profile && this.profile.id) ? this.profile.id : (this.user ? this.user.id : null)
+        };
+
+        try {
+            if (!isSupabaseConfigured) {
+                // Fallback local storage
+                let requests = JSON.parse(localStorage.getItem('cw_requests') || '[]');
+                if (id) {
+                    const idx = requests.findIndex(r => r.id === id);
+                    if (idx > -1) {
+                        requests[idx] = { ...requests[idx], ...newRequest, updated_at: new Date().toISOString() };
+                    }
+                } else {
+                    requests.push({
+                        id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2),
+                        ...newRequest,
+                        created_by: 'local',
+                        created_at: new Date().toISOString()
+                    });
+                }
+                localStorage.setItem('cw_requests', JSON.stringify(requests));
+                UI.showToast('Request berhasil disimpan (Local)', 'success');
+            } else {
+                if (id) {
+                    const { error } = await supabaseClient.from('requests').update(newRequest).eq('id', id);
+                    if (error) throw error;
+                } else {
+                    const { error } = await supabaseClient.from('requests').insert([newRequest]);
+                    if (error) throw error;
+                }
+                UI.showToast('Request berhasil disimpan', 'success');
+            }
+            form.reset();
+            if(document.getElementById('req-id')) {
+                document.getElementById('req-id').value = '';
+            }
+
+            // Reload requests
+            this.loadAdminRequests();
+            this.loadRequests();
+
+        } catch (error) {
+            UI.showToast('Gagal menyimpan request', 'error');
+            console.error(error);
+        } finally {
+            if(btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="ph ph-paper-plane-right"></i> Kirim Request';
+            }
+        }
+    },
+
+    async loadAdminRequests() {
+        if (!isSupabaseConfigured) {
+             const requests = JSON.parse(localStorage.getItem('cw_requests') || '[]');
+             this.renderAdminRequests(requests);
+             return;
+        }
+        try {
+            const { data, error } = await supabaseClient.from('requests').select('*').order('created_at', { ascending: false });
+            if (error) throw error;
+            this.renderAdminRequests(data);
+        } catch (error) {
+            console.error('Error loading admin requests:', error);
+        }
+    },
+
+    renderAdminRequests(requests) {
+        const container = document.getElementById('admin-request-list');
+        if (!container) return;
+
+        container.innerHTML = '';
+        if (!requests || requests.length === 0) {
+            container.innerHTML = '<div class="empty-state">Belum ada request.</div>';
+            return;
+        }
+
+        requests.forEach(req => {
+            const el = document.createElement('div');
+            el.className = 'report-card';
+            const statusColor = req.status === 'Accepted' ? 'var(--success-color)' : req.status === 'Rejected' ? 'var(--error-color)' : 'var(--warning-color)';
+            el.innerHTML = `
+                <div style="display:flex; justify-content: space-between; align-items: flex-start; gap: 16px;">
+                    <div>
+                        <h4 style="margin-bottom: 4px;">${Utils.escapeHTML(req.judul)}</h4>
+                        <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 8px;">
+                            Tujuan: ${Utils.escapeHTML(req.tujuan)} | Deadline: ${Utils.formatDate(req.batas_waktu)}
+                        </div>
+                        <span style="padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 600; border: 1px solid ${statusColor}; color: ${statusColor};">${req.status.toUpperCase()}</span>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn-icon" title="Lihat" onclick="app.openRequestModal('${req.id}', true)"><i class="ph ph-eye"></i></button>
+                        <button class="btn-icon" style="color: var(--error-color)" title="Hapus" onclick="app.deleteRequest('${req.id}')"><i class="ph ph-trash"></i></button>
+                    </div>
+                </div>
+            `;
+            container.appendChild(el);
+        });
+    },
+
+    async loadRequests() {
+        if (!isSupabaseConfigured) {
+            const requests = JSON.parse(localStorage.getItem('cw_requests') || '[]');
+            this.renderRequests(requests);
+            return;
+        }
+        try {
+            const { data, error } = await supabaseClient.from('requests').select('*').order('created_at', { ascending: false });
+            if (error) throw error;
+            this.renderRequests(data);
+        } catch(error) {
+            console.error('Error loading requests:', error);
+        }
+    },
+
+    renderRequests(requests) {
+        const container = document.getElementById('request-list');
+        if (!container) return;
+
+        container.innerHTML = '';
+        if (!requests || requests.length === 0) {
+            container.innerHTML = '<div class="empty-state">Belum ada request tugas.</div>';
+            return;
+        }
+
+        requests.forEach(req => {
+            const el = document.createElement('div');
+            el.className = 'report-card';
+            const statusColor = req.status === 'Accepted' ? 'var(--success-color)' : req.status === 'Rejected' ? 'var(--error-color)' : 'var(--warning-color)';
+            el.innerHTML = `
+                <div style="display:flex; justify-content: space-between; align-items: flex-start; gap: 16px;">
+                    <div>
+                        <h4 style="margin-bottom: 4px;">${Utils.escapeHTML(req.judul)}</h4>
+                        <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 8px;">
+                            Tujuan: ${Utils.escapeHTML(req.tujuan)} | Deadline: ${Utils.formatDate(req.batas_waktu)}
+                        </div>
+                        <span style="padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 600; border: 1px solid ${statusColor}; color: ${statusColor};">${req.status.toUpperCase()}</span>
+                    </div>
+                    <button class="btn-primary" style="padding: 8px 16px; font-size: 0.9rem;" onclick="app.openRequestModal('${req.id}', false)">Lihat Detail</button>
+                </div>
+            `;
+            container.appendChild(el);
+        });
+    },
+
+    async openRequestModal(id, isAdminView = false) {
+        let req;
+        if (!isSupabaseConfigured) {
+             const requests = JSON.parse(localStorage.getItem('cw_requests') || '[]');
+             req = requests.find(r => r.id === id);
+        } else {
+             const { data } = await supabaseClient.from('requests').select('*').eq('id', id).single();
+             req = data;
+        }
+
+        if(!req) return;
+
+        document.getElementById('modal-req-judul').textContent = req.judul;
+        document.getElementById('modal-req-tujuan').textContent = req.tujuan;
+        document.getElementById('modal-req-batas').textContent = Utils.formatDate(req.batas_waktu);
+        document.getElementById('modal-req-deskripsi').textContent = req.deskripsi;
+
+        // Removed status logic from modal since it isn't defined in the HTML structure
+        const actionArea = document.getElementById('modal-req-actions');
+
+        if (isAdminView) {
+            actionArea.style.display = 'none'; // Admins don't accept/reject their own requests in this view
+        } else {
+            actionArea.style.display = req.status === 'Pending' ? 'flex' : 'none';
+            if (req.status === 'Pending') {
+                actionArea.innerHTML = `
+                    <button class="btn-secondary" style="color: var(--error-color); border-color: var(--error-color);" onclick="app.updateRequestStatus('${req.id}', 'Rejected')">Tolak Tugas</button>
+                    <button class="btn-primary" onclick="app.updateRequestStatus('${req.id}', 'Accepted')">Terima Tugas</button>
+                `;
+            }
+        }
+
+        document.getElementById('request-modal').classList.add('active');
+        document.getElementById('request-modal').style.display = 'flex';
+    },
+
+    closeRequestModal() {
+        document.getElementById('request-modal').classList.remove('active');
+        document.getElementById('request-modal').style.display = 'none';
+    },
+
+    async updateRequestStatus(id, newStatus) {
+        try {
+            if (!isSupabaseConfigured) {
+                let requests = JSON.parse(localStorage.getItem('cw_requests') || '[]');
+                const idx = requests.findIndex(r => r.id === id);
+                if (idx > -1) {
+                    requests[idx].status = newStatus;
+                    localStorage.setItem('cw_requests', JSON.stringify(requests));
+                }
+            } else {
+                const { error } = await supabaseClient.from('requests').update({ status: newStatus }).eq('id', id);
+                if (error) throw error;
+            }
+            UI.showToast(`Request ${newStatus === 'Accepted' ? 'diterima' : 'ditolak'}`, 'success');
+            this.closeRequestModal();
+            this.loadRequests(); // Update writer view
+        } catch(error) {
+            UI.showToast('Gagal update status request', 'error');
+        }
+    },
+
+    async deleteRequest(id) {
+        if (!confirm('Hapus request ini?')) return;
+        try {
+            if (!isSupabaseConfigured) {
+                let requests = JSON.parse(localStorage.getItem('cw_requests') || '[]');
+                requests = requests.filter(r => r.id !== id);
+                localStorage.setItem('cw_requests', JSON.stringify(requests));
+            } else {
+                const { error } = await supabaseClient.from('requests').delete().eq('id', id);
+                if (error) throw error;
+            }
+            UI.showToast('Request dihapus', 'success');
+            this.loadAdminRequests();
+        } catch(error) {
+            UI.showToast('Gagal menghapus request', 'error');
+        }
+    }
+});
