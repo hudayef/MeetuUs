@@ -71,9 +71,15 @@
                         </a>
                     </li>
                     <li id="nav-create">
-                        <a href="#" onclick="app.navigate('form')">
+                        <a href="#" onclick="app.startNewReport()">
                             <i class="ph ph-plus-circle" aria-hidden="true"></i>
                             <span>Buat Laporan</span>
+                        </a>
+                    </li>
+                    <li id="nav-requests" style="display: none;">
+                        <a href="#" onclick="app.navigate('requests')">
+                            <i class="ph ph-envelope-open" aria-hidden="true"></i>
+                            <span>Daftar Request</span>
                         </a>
                     </li>
                     <!-- Admin Only Menu -->
@@ -110,7 +116,7 @@
             <header class="top-header">
                 <h1 id="page-title">Dashboard</h1>
                 <div class="header-actions">
-                    <button class="btn btn-primary" onclick="app.navigate('form')" id="btn-header-create" aria-label="Buat Laporan Baru">
+                    <button class="btn btn-primary" onclick="app.startNewReport()" id="btn-header-create" aria-label="Buat Laporan Baru">
                         <i class="ph ph-plus" aria-hidden="true"></i> Buat Laporan Baru
                     </button>
                 </div>
@@ -170,7 +176,7 @@
                         <i class="ph ph-folder-open" aria-hidden="true"></i>
                         <h3>Belum Ada Laporan</h3>
                         <p>Mulai buat laporan bulanan pertama Anda.</p>
-                        <button class="btn btn-primary mt-3" onclick="app.navigate('form')">Buat Laporan</button>
+                        <button class="btn btn-primary mt-3" onclick="app.startNewReport()">Buat Laporan</button>
                     </div>
                 </div>
             </section>
@@ -179,6 +185,7 @@
             <section id="view-form" class="view-section" style="display: none;" aria-label="Form Laporan">
                 <form id="report-form" onsubmit="app.saveReport(event)">
                     <input type="hidden" id="report-id">
+                    <input type="hidden" id="report-user-id">
 
                     <!-- Section: Identitas -->
                     <div class="form-card">
@@ -390,12 +397,126 @@
                         </table>
                     </div>
                 </div>
+
+                <!-- Admin Only: Buat Request Baru -->
+                <div id="admin-request-form-container" class="form-card mt-3">
+                    <h2><i class="ph ph-paper-plane-right" aria-hidden="true"></i> Buat Request Baru</h2>
+                    <form id="request-form" onsubmit="app.saveRequest(event)">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="req-judul">Judul Request</label>
+                                <input type="text" id="req-judul" required placeholder="Contoh: Desain Banner Promo" aria-required="true">
+                            </div>
+                            <div class="form-group">
+                                <label for="req-tujuan">Tujuan / Bagian</label>
+                                <input type="text" id="req-tujuan" required placeholder="Contoh: Tim Multimedia / Design" aria-required="true">
+                            </div>
+                            <div class="form-group">
+                                <label for="req-batas">Batas Waktu (Deadline)</label>
+                                <input type="date" id="req-batas" required aria-required="true">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="req-deskripsi">Deskripsi / Instruksi Lengkap</label>
+                            <textarea id="req-deskripsi" rows="4" required placeholder="Jelaskan secara detail kebutuhan desain atau tugasnya..."></textarea>
+                        </div>
+                        <div class="form-actions" style="margin-top: 1rem; padding-top: 1rem; padding-bottom: 0; background: transparent; position: static; border-top: none;">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="ph ph-paper-plane-right"></i> Kirim Request
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Admin Only: List Requests -->
+                <div class="form-card mt-3">
+                    <h2><i class="ph ph-envelope-open" aria-hidden="true"></i> Daftar Request Tugas (Admin View)</h2>
+                    <div class="report-list" id="admin-request-list">
+                        <!-- Request items injected here -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Writer Requests View -->
+            <section id="view-requests" class="view-section" style="display: none;" aria-label="Daftar Request">
+                <div class="form-card">
+                    <h2><i class="ph ph-envelope-open" aria-hidden="true"></i> Daftar Request Tugas</h2>
+                    <div class="report-list" id="request-list">
+                        <!-- Request items injected here -->
+                    </div>
+                </div>
             </section>
 
             <!-- Print/Export Template (Hidden) -->
             <div id="print-template" style="display: none;" aria-hidden="true"></div>
 
         </main>
+    </div>
+
+    <!-- Modal Laporan Detail (View Only) -->
+    <div id="report-detail-modal" class="auth-overlay" style="display: none;">
+        <div class="auth-card glass-panel" style="max-width: 800px; width: 95%; max-height: 90vh; overflow-y: auto; text-align: left;">
+            <div class="auth-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; margin-bottom: 1rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h2 style="font-size: 1.25rem;">Detail Laporan <span id="detail-report-nama"></span></h2>
+                    <button class="btn-icon" onclick="app.closeReportDetailModal()" aria-label="Tutup"><i class="ph ph-x"></i></button>
+                </div>
+                <div style="display: flex; gap: 1rem; margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">
+                    <span><i class="ph ph-briefcase"></i> <span id="detail-report-posisi"></span></span>
+                    <span><i class="ph ph-buildings"></i> <span id="detail-report-divisi"></span></span>
+                    <span><i class="ph ph-calendar"></i> <span id="detail-report-periode"></span></span>
+                </div>
+            </div>
+
+            <div class="detail-section" style="margin-bottom: 1.5rem;">
+                <label style="font-weight: 600; font-size: 0.9rem; color: var(--text-secondary); display: block;">Ringkasan Eksekutif:</label>
+                <div id="detail-report-ringkasan" style="padding: 0.5rem 0; font-size: 0.95rem; white-space: pre-wrap;"></div>
+            </div>
+
+            <div class="detail-section" style="margin-bottom: 1.5rem;">
+                <label style="font-weight: 600; font-size: 0.9rem; color: var(--text-secondary); display: block;">Uraian Tugas Utama:</label>
+                <div id="detail-report-tugas" style="padding: 0.5rem 0; font-size: 0.95rem; white-space: pre-wrap;"></div>
+            </div>
+
+            <div class="detail-section" style="margin-bottom: 1.5rem;">
+                <label style="font-weight: 600; font-size: 0.9rem; color: var(--text-secondary); display: block;">Evaluasi Diri (Kelebihan):</label>
+                <div id="detail-report-kelebihan" style="padding: 0.5rem 0; font-size: 0.95rem; white-space: pre-wrap;"></div>
+            </div>
+
+            <div class="detail-section" style="margin-bottom: 1.5rem;">
+                <label style="font-weight: 600; font-size: 0.9rem; color: var(--text-secondary); display: block;">Area Peningkatan:</label>
+                <div id="detail-report-peningkatan" style="padding: 0.5rem 0; font-size: 0.95rem; white-space: pre-wrap;"></div>
+            </div>
+
+            <div style="margin-top: 2rem; border-top: 1px solid var(--border-color); padding-top: 1rem; display: flex; justify-content: flex-end;">
+                <button class="btn btn-outline" onclick="app.closeReportDetailModal()">Tutup</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Request Detail -->
+    <div id="request-modal" class="auth-overlay" style="display: none;">
+        <div class="auth-card glass-panel" style="max-width: 600px;">
+            <div class="auth-header" style="text-align: left; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; margin-bottom: 1rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h2 id="modal-req-judul" style="font-size: 1.25rem;">Judul Request</h2>
+                    <button class="btn-icon" onclick="app.closeRequestModal()" aria-label="Tutup"><i class="ph ph-x"></i></button>
+                </div>
+                <div style="display: flex; gap: 1rem; margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">
+                    <span><i class="ph ph-users"></i> <span id="modal-req-tujuan">Tujuan</span></span>
+                    <span><i class="ph ph-calendar"></i> <span id="modal-req-batas">Deadline</span></span>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 2rem;">
+                <label style="font-weight: 600; font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.5rem; display: block;">Deskripsi & Instruksi:</label>
+                <div id="modal-req-deskripsi" style="background: var(--bg-element); padding: 1rem; border-radius: var(--radius-md); font-size: 0.95rem; white-space: pre-wrap;"></div>
+            </div>
+
+            <div id="modal-req-actions" style="display: flex; gap: 1rem; justify-content: flex-end;">
+                <!-- Buttons injected via JS based on role -->
+            </div>
+        </div>
     </div>
 
     <!-- Toast Notification Container -->
