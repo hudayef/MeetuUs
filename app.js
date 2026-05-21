@@ -7,8 +7,9 @@
 // SUPABASE CONFIGURATION
 // =========================================
 // GANTI VALUE DI BAWAH INI DENGAN PROJECT URL & ANON KEY DARI SUPABASE ANDA
-const SUPABASE_URL = 'https://pvuortefdvpseedroctw.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_6OLuITMEiE5u0TSqIQGlqw_LO_tvSg_';
+const SUPABASE_URL = 'https://ozjhyizxhsyfdafyuzun.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_LF9ztharDAWW9_qZgf0c_g_ekWbCddj';
+
 
 const isSupabaseConfigured = SUPABASE_URL !== 'https://pvuortefdvpseedroctw.supabase.co';
 
