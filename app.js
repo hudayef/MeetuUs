@@ -789,7 +789,7 @@ const app = {
             });
 
             // Fetch All Reports
-            const { data: reports, error: errRep } = await supabaseClient.from('reports').select('*, profiles(full_name)').order('created_at', { ascending: false });
+            const { data: reports, error: errRep } = await supabaseClient.from('reports').select('*').order('created_at', { ascending: false });
             if (errRep) throw errRep;
             this.allReports = reports;
             document.getElementById('admin-total-reports').textContent = reports.length;
@@ -810,6 +810,7 @@ const app = {
             });
 
         } catch (error) {
+            console.error(error);
             UI.showToast('Gagal memuat data admin', 'error');
         }
     },
