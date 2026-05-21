@@ -629,6 +629,27 @@ const app = {
         }
     },
 
+    viewReportDetail(id) {
+        const report = this.reports.find(r => r.id === id) || this.allReports.find(r => r.id === id);
+        if (!report) return;
+
+        document.getElementById('detail-report-nama').textContent = report.nama ? ` - ${report.nama.split(' ')[0]}` : '';
+        document.getElementById('detail-report-posisi').textContent = report.posisi || '-';
+        document.getElementById('detail-report-divisi').textContent = report.divisi || '-';
+        document.getElementById('detail-report-periode').textContent = report.periode ? Utils.formatMonth(report.periode) : '-';
+
+        document.getElementById('detail-report-ringkasan').textContent = report.ringkasan || 'Tidak ada ringkasan.';
+        document.getElementById('detail-report-tugas').textContent = report.tugas_utama || 'Tidak ada uraian tugas.';
+        document.getElementById('detail-report-kelebihan').textContent = report.eval_kelebihan || '-';
+        document.getElementById('detail-report-peningkatan').textContent = report.eval_peningkatan || '-';
+
+        document.getElementById('report-detail-modal').style.display = 'flex';
+    },
+
+    closeReportDetailModal() {
+        document.getElementById('report-detail-modal').style.display = 'none';
+    },
+
     async deleteReport(id) {
         if (confirm('Apakah Anda yakin ingin menghapus laporan ini? Tindakan ini tidak dapat dibatalkan.')) {
             try {
@@ -735,7 +756,7 @@ const app = {
                     <td>${Utils.formatMonth(r.periode)}</td>
                     <td><div style="max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${Utils.escapeHTML(r.ringkasan)}</div></td>
                     <td class="action-col">
-                         <button class="btn-icon" style="display:inline-flex; padding: 4px;" title="Lihat/Edit" onclick="app.editReport('${r.id}')"><i class="ph ph-eye"></i></button>
+                         <button class="btn-icon" style="display:inline-flex; padding: 4px;" title="Lihat Detail" onclick="app.viewReportDetail('${r.id}')"><i class="ph ph-eye"></i></button>
                     </td>
                 `;
                 repBody.appendChild(tr);
@@ -769,7 +790,7 @@ const app = {
             });
 
             // Fetch All Reports
-            const { data: reports, error: errRep } = await supabaseClient.from('reports').select('*, profiles(full_name)').order('created_at', { ascending: false });
+            const { data: reports, error: errRep } = await supabaseClient.from('reports').select('*').order('created_at', { ascending: false });
             if (errRep) throw errRep;
             this.allReports = reports;
             document.getElementById('admin-total-reports').textContent = reports.length;
@@ -783,13 +804,14 @@ const app = {
                     <td>${Utils.formatMonth(r.periode)}</td>
                     <td><div style="max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${Utils.escapeHTML(r.ringkasan)}</div></td>
                     <td class="action-col">
-                         <button class="btn-icon" style="display:inline-flex; padding: 4px;" title="Lihat/Edit" onclick="app.editReport('${r.id}')"><i class="ph ph-eye"></i></button>
+                         <button class="btn-icon" style="display:inline-flex; padding: 4px;" title="Lihat Detail" onclick="app.viewReportDetail('${r.id}')"><i class="ph ph-eye"></i></button>
                     </td>
                 `;
                 repBody.appendChild(tr);
             });
 
         } catch (error) {
+            console.error(error);
             UI.showToast('Gagal memuat data admin', 'error');
         }
     },
