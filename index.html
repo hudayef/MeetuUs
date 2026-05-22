@@ -172,13 +172,12 @@
                 <!-- Report List / Grid -->
                 <div class="report-list" id="report-list" aria-live="polite">
                     <!-- Reports will be dynamically injected here -->
-                </div>
-
-                <div class="empty-state" id="empty-state" style="display: none;">
-                    <i class="ph ph-folder-open" aria-hidden="true"></i>
-                    <h3>Belum Ada Laporan</h3>
-                    <p>Mulai buat laporan bulanan pertama Anda.</p>
-                    <button class="btn btn-primary mt-3" onclick="app.startNewReport()">Buat Laporan</button>
+                    <div class="empty-state" id="empty-state">
+                        <i class="ph ph-folder-open" aria-hidden="true"></i>
+                        <h3>Belum Ada Laporan</h3>
+                        <p>Mulai buat laporan bulanan pertama Anda.</p>
+                        <button class="btn btn-primary mt-3" onclick="app.startNewReport()">Buat Laporan</button>
+                    </div>
                 </div>
             </section>
 
@@ -452,47 +451,6 @@
             <div id="print-template" style="display: none;" aria-hidden="true"></div>
 
         </main>
-    </div>
-
-    <!-- Modal Laporan Detail (View Only) -->
-    <div id="report-detail-modal" class="auth-overlay" style="display: none;">
-        <div class="auth-card glass-panel" style="max-width: 800px; width: 95%; max-height: 90vh; overflow-y: auto; text-align: left;">
-            <div class="auth-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; margin-bottom: 1rem;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <h2 style="font-size: 1.25rem;">Detail Laporan <span id="detail-report-nama"></span></h2>
-                    <button class="btn-icon" onclick="app.closeReportDetailModal()" aria-label="Tutup"><i class="ph ph-x"></i></button>
-                </div>
-                <div style="display: flex; gap: 1rem; margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">
-                    <span><i class="ph ph-briefcase"></i> <span id="detail-report-posisi"></span></span>
-                    <span><i class="ph ph-buildings"></i> <span id="detail-report-divisi"></span></span>
-                    <span><i class="ph ph-calendar"></i> <span id="detail-report-periode"></span></span>
-                </div>
-            </div>
-
-            <div class="detail-section" style="margin-bottom: 1.5rem;">
-                <label style="font-weight: 600; font-size: 0.9rem; color: var(--text-secondary); display: block;">Ringkasan Eksekutif:</label>
-                <div id="detail-report-ringkasan" style="padding: 0.5rem 0; font-size: 0.95rem; white-space: pre-wrap;"></div>
-            </div>
-
-            <div class="detail-section" style="margin-bottom: 1.5rem;">
-                <label style="font-weight: 600; font-size: 0.9rem; color: var(--text-secondary); display: block;">Uraian Tugas Utama:</label>
-                <div id="detail-report-tugas" style="padding: 0.5rem 0; font-size: 0.95rem; white-space: pre-wrap;"></div>
-            </div>
-
-            <div class="detail-section" style="margin-bottom: 1.5rem;">
-                <label style="font-weight: 600; font-size: 0.9rem; color: var(--text-secondary); display: block;">Evaluasi Diri (Kelebihan):</label>
-                <div id="detail-report-kelebihan" style="padding: 0.5rem 0; font-size: 0.95rem; white-space: pre-wrap;"></div>
-            </div>
-
-            <div class="detail-section" style="margin-bottom: 1.5rem;">
-                <label style="font-weight: 600; font-size: 0.9rem; color: var(--text-secondary); display: block;">Area Peningkatan:</label>
-                <div id="detail-report-peningkatan" style="padding: 0.5rem 0; font-size: 0.95rem; white-space: pre-wrap;"></div>
-            </div>
-
-            <div style="margin-top: 2rem; border-top: 1px solid var(--border-color); padding-top: 1rem; display: flex; justify-content: flex-end;">
-                <button class="btn btn-outline" onclick="app.closeReportDetailModal()">Tutup</button>
-            </div>
-        </div>
     </div>
 
     <!-- Modal Request Detail -->

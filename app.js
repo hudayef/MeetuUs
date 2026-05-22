@@ -7,8 +7,9 @@
 // SUPABASE CONFIGURATION
 // =========================================
 // GANTI VALUE DI BAWAH INI DENGAN PROJECT URL & ANON KEY DARI SUPABASE ANDA
-const SUPABASE_URL = 'https://pvuortefdvpseedroctw.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_6OLuITMEiE5u0TSqIQGlqw_LO_tvSg_';
+const SUPABASE_URL = 'https://ozjhyizxhsyfdafyuzun.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_LF9ztharDAWW9_qZgf0c_g_ekWbCddj';
+
 
 // Initialize Supabase Client
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -181,7 +182,19 @@ const app = {
         if (session) {
             await this.handleUserLogin(session.user);
         } else {
-            this.showAuth();
+            // Fallback Mode: Skip Auth, grant pseudo-admin
+            console.warn("Supabase not configured. Falling back to LocalStorage mode.");
+            this.hideAuth();
+            this.user = { id: 'local_user' };
+            this.profile = { full_name: 'Local User', role: 'admin' };
+            document.getElementById('display-user-name').textContent = 'Local Mode';
+            document.getElementById('display-user-role').textContent = 'admin';
+            document.getElementById('nav-admin').style.display = 'flex';
+            const navRequests = document.getElementById('nav-requests');
+            if(navRequests) navRequests.style.display = 'none';
+
+            await this.loadReports();
+            this.navigate('dashboard');
         }
 
         // Listen for auth changes
@@ -250,6 +263,25 @@ const app = {
         btn.disabled = true;
         btn.textContent = 'Memproses...';
 
+        if (!isSupabaseConfigured) {
+            // Fallback Local Mode logic
+            setTimeout(async () => {
+                UI.showToast(this.isLoginMode ? 'Login Local berhasil' : 'Pendaftaran Local berhasil', 'success');
+                this.hideAuth();
+                this.user = { id: 'local_user_' + Date.now() };
+                this.profile = { full_name: fullName, role: 'admin' };
+                document.getElementById('display-user-name').textContent = fullName;
+                document.getElementById('display-user-role').textContent = 'admin';
+                document.getElementById('nav-admin').style.display = 'flex';
+                const navRequests = document.getElementById('nav-requests');
+                if(navRequests) navRequests.style.display = 'none';
+
+                await this.loadReports();
+                this.navigate('dashboard');
+            }, 800);
+            return;
+        }
+
         try {
             if (this.isLoginMode) {
                 const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
@@ -299,10 +331,12 @@ const app = {
             const navAdmin = document.getElementById('nav-admin');
             const navReq = document.getElementById('nav-requests');
             if (profile.role === 'admin') {
-                if (navAdmin) navAdmin.style.display = 'flex';
+                document.getElementById('nav-admin').style.display = 'flex';
+                const navReq = document.getElementById('nav-requests');
                 if (navReq) navReq.style.display = 'none';
             } else {
-                if (navAdmin) navAdmin.style.display = 'none';
+                document.getElementById('nav-admin').style.display = 'none';
+                const navReq = document.getElementById('nav-requests');
                 if (navReq) navReq.style.display = 'flex';
             }
         }
@@ -567,13 +601,11 @@ const app = {
         document.getElementById('detail-report-kelebihan').textContent = report.eval_kelebihan || '-';
         document.getElementById('detail-report-peningkatan').textContent = report.eval_peningkatan || '-';
 
-        const modal = document.getElementById('report-detail-modal');
-        if (modal) modal.style.display = 'flex';
+        document.getElementById('report-detail-modal').style.display = 'flex';
     },
 
     closeReportDetailModal() {
-        const modal = document.getElementById('report-detail-modal');
-        if (modal) modal.style.display = 'none';
+        document.getElementById('report-detail-modal').style.display = 'none';
     },
 
     async deleteReport(id) {
@@ -668,6 +700,31 @@ const app = {
     },
 
     async loadAdminData() {
+        if (!isSupabaseConfigured) {
+            // Mock data for fallback mode
+            document.getElementById('admin-total-users').textContent = "1";
+            const userBody = document.querySelector('#table-users tbody');
+            userBody.innerHTML = `<tr><td>Local User</td><td>local@example.com</td><td><span style="padding: 4px 8px; border-radius: 4px; background: var(--primary-light); color: var(--primary-color); font-size: 0.8rem; font-weight: 600;">admin</span></td><td>-</td></tr>`;
+
+            document.getElementById('admin-total-reports').textContent = this.reports.length;
+            this.allReports = this.reports;
+            const repBody = document.querySelector('#table-all-reports tbody');
+            repBody.innerHTML = '';
+            this.reports.forEach(r => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${Utils.escapeHTML(r.nama)}</td>
+                    <td>${Utils.formatMonth(r.periode)}</td>
+                    <td><div style="max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${Utils.escapeHTML(r.ringkasan)}</div></td>
+                    <td class="action-col">
+                         <button class="btn-icon" style="display:inline-flex; padding: 4px;" title="Lihat Detail" onclick="app.viewReportDetail('${r.id}')"><i class="ph ph-eye"></i></button>
+                    </td>
+                `;
+                repBody.appendChild(tr);
+            });
+            return;
+        }
+
         try {
             // Fetch Users
             const { data: users, error: errUser } = await supabaseClient.from('profiles').select('*').order('created_at', { ascending: false });
@@ -867,15 +924,34 @@ Object.assign(app, {
         };
 
         try {
-            if (id) {
-                const { error } = await supabaseClient.from('requests').update(newRequest).eq('id', id);
-                if (error) throw error;
+            if (!isSupabaseConfigured) {
+                // Fallback local storage
+                let requests = JSON.parse(localStorage.getItem('cw_requests') || '[]');
+                if (id) {
+                    const idx = requests.findIndex(r => r.id === id);
+                    if (idx > -1) {
+                        requests[idx] = { ...requests[idx], ...newRequest, updated_at: new Date().toISOString() };
+                    }
+                } else {
+                    requests.push({
+                        id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2),
+                        ...newRequest,
+                        created_by: 'local',
+                        created_at: new Date().toISOString()
+                    });
+                }
+                localStorage.setItem('cw_requests', JSON.stringify(requests));
+                UI.showToast('Request berhasil disimpan (Local)', 'success');
             } else {
-                const { error } = await supabaseClient.from('requests').insert([newRequest]);
-                if (error) throw error;
+                if (id) {
+                    const { error } = await supabaseClient.from('requests').update(newRequest).eq('id', id);
+                    if (error) throw error;
+                } else {
+                    const { error } = await supabaseClient.from('requests').insert([newRequest]);
+                    if (error) throw error;
+                }
+                UI.showToast('Request berhasil disimpan', 'success');
             }
-            UI.showToast('Request berhasil disimpan', 'success');
-
             form.reset();
             if(document.getElementById('req-id')) {
                 document.getElementById('req-id').value = '';
@@ -897,6 +973,11 @@ Object.assign(app, {
     },
 
     async loadAdminRequests() {
+        if (!isSupabaseConfigured) {
+             const requests = JSON.parse(localStorage.getItem('cw_requests') || '[]');
+             this.renderAdminRequests(requests);
+             return;
+        }
         try {
             const { data, error } = await supabaseClient.from('requests').select('*').order('created_at', { ascending: false });
             if (error) throw error;
@@ -940,6 +1021,11 @@ Object.assign(app, {
     },
 
     async loadRequests() {
+        if (!isSupabaseConfigured) {
+            const requests = JSON.parse(localStorage.getItem('cw_requests') || '[]');
+            this.renderRequests(requests);
+            return;
+        }
         try {
             const { data, error } = await supabaseClient.from('requests').select('*').order('created_at', { ascending: false });
             if (error) throw error;
@@ -981,8 +1067,13 @@ Object.assign(app, {
 
     async openRequestModal(id, isAdminView = false) {
         let req;
-        const { data } = await supabaseClient.from('requests').select('*').eq('id', id).single();
-        req = data;
+        if (!isSupabaseConfigured) {
+             const requests = JSON.parse(localStorage.getItem('cw_requests') || '[]');
+             req = requests.find(r => r.id === id);
+        } else {
+             const { data } = await supabaseClient.from('requests').select('*').eq('id', id).single();
+             req = data;
+        }
 
         if(!req) return;
 
@@ -993,40 +1084,41 @@ Object.assign(app, {
 
         // Removed status logic from modal since it isn't defined in the HTML structure
         const actionArea = document.getElementById('modal-req-actions');
-        if (actionArea) {
-            if (isAdminView) {
-                actionArea.style.display = 'none'; // Admins don't accept/reject their own requests in this view
-            } else {
-                actionArea.style.display = req.status === 'Pending' ? 'flex' : 'none';
-                if (req.status === 'Pending') {
+
+        if (isAdminView) {
+            actionArea.style.display = 'none'; // Admins don't accept/reject their own requests in this view
+        } else {
+            actionArea.style.display = req.status === 'Pending' ? 'flex' : 'none';
+            if (req.status === 'Pending') {
                 actionArea.innerHTML = `
                     <button class="btn-secondary" style="color: var(--error-color); border-color: var(--error-color);" onclick="app.updateRequestStatus('${req.id}', 'Rejected')">Tolak Tugas</button>
                     <button class="btn-primary" onclick="app.updateRequestStatus('${req.id}', 'Accepted')">Terima Tugas</button>
                 `;
-                }
             }
         }
 
-        const modal = document.getElementById('request-modal');
-        if (modal) {
-            modal.classList.add('active');
-            modal.style.display = 'flex';
-        }
+        document.getElementById('request-modal').classList.add('active');
+        document.getElementById('request-modal').style.display = 'flex';
     },
 
     closeRequestModal() {
-        const modal = document.getElementById('request-modal');
-        if (modal) {
-            modal.classList.remove('active');
-            modal.style.display = 'none';
-        }
+        document.getElementById('request-modal').classList.remove('active');
+        document.getElementById('request-modal').style.display = 'none';
     },
 
     async updateRequestStatus(id, newStatus) {
         try {
-            const { error } = await supabaseClient.from('requests').update({ status: newStatus }).eq('id', id);
-            if (error) throw error;
-
+            if (!isSupabaseConfigured) {
+                let requests = JSON.parse(localStorage.getItem('cw_requests') || '[]');
+                const idx = requests.findIndex(r => r.id === id);
+                if (idx > -1) {
+                    requests[idx].status = newStatus;
+                    localStorage.setItem('cw_requests', JSON.stringify(requests));
+                }
+            } else {
+                const { error } = await supabaseClient.from('requests').update({ status: newStatus }).eq('id', id);
+                if (error) throw error;
+            }
             UI.showToast(`Request ${newStatus === 'Accepted' ? 'diterima' : 'ditolak'}`, 'success');
             this.closeRequestModal();
             this.loadRequests(); // Update writer view
@@ -1038,9 +1130,14 @@ Object.assign(app, {
     async deleteRequest(id) {
         if (!confirm('Hapus request ini?')) return;
         try {
-            const { error } = await supabaseClient.from('requests').delete().eq('id', id);
-            if (error) throw error;
-
+            if (!isSupabaseConfigured) {
+                let requests = JSON.parse(localStorage.getItem('cw_requests') || '[]');
+                requests = requests.filter(r => r.id !== id);
+                localStorage.setItem('cw_requests', JSON.stringify(requests));
+            } else {
+                const { error } = await supabaseClient.from('requests').delete().eq('id', id);
+                if (error) throw error;
+            }
             UI.showToast('Request dihapus', 'success');
             this.loadAdminRequests();
         } catch(error) {
