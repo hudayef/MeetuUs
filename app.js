@@ -11,16 +11,10 @@ const SUPABASE_URL = 'https://ozjhyizxhsyfdafyuzun.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_LF9ztharDAWW9_qZgf0c_g_ekWbCddj';
 
 
-const isSupabaseConfigured = SUPABASE_URL !== 'https://pvuortefdvpseedroctw.supabase.co';
-
-// Initialize Supabase Client ONLY if configured
-let supabaseClient = null;
-if (isSupabaseConfigured) {
-    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-}
+// Initialize Supabase Client
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const Storage = {
-    REPORTS_KEY: 'cw_reports',
     THEME_KEY: 'cw_theme_v2',
     DRAFT_KEY: 'cw_draft_v2',
 
@@ -47,20 +41,6 @@ const Storage = {
 
     clearDraft() {
         localStorage.removeItem(this.DRAFT_KEY);
-    },
-
-    // Fallback LocalStorage CRUD when Supabase is not configured
-    getReportsFallback() {
-        try {
-            const data = localStorage.getItem(this.REPORTS_KEY);
-            return data ? JSON.parse(data) : [];
-        } catch (e) {
-            return [];
-        }
-    },
-
-    saveReportsFallback(reports) {
-        localStorage.setItem(this.REPORTS_KEY, JSON.stringify(reports));
     }
 };
 
@@ -115,8 +95,8 @@ const UI = {
         container.appendChild(toast);
 
         setTimeout(() => {
-            toast.style.animation = 'slideOut 0.4s var(--transition-bounce) forwards';
-            setTimeout(() => toast.remove(), 400);
+            if (toast) toast.style.animation = 'slideOut 0.4s var(--transition-bounce) forwards';
+            setTimeout(() => { if (toast) toast.remove(); }, 400);
         }, 3000);
     },
 
@@ -197,23 +177,10 @@ const app = {
         UI.setTheme(this.currentTheme);
         this.setupListeners();
 
-        if (isSupabaseConfigured) {
-            // Check Auth Session
-            const { data: { session } } = await supabaseClient.auth.getSession();
-            if (session) {
-                await this.handleUserLogin(session.user);
-            } else {
-                this.showAuth();
-            }
-
-            // Listen for auth changes
-            supabaseClient.auth.onAuthStateChange(async (event, session) => {
-                if (event === 'SIGNED_IN') {
-                    await this.handleUserLogin(session.user);
-                } else if (event === 'SIGNED_OUT') {
-                    this.handleUserLogout();
-                }
-            });
+        // Check Auth Session
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session) {
+            await this.handleUserLogin(session.user);
         } else {
             // Fallback Mode: Skip Auth, grant pseudo-admin
             console.warn("Supabase not configured. Falling back to LocalStorage mode.");
@@ -229,6 +196,15 @@ const app = {
             await this.loadReports();
             this.navigate('dashboard');
         }
+
+        // Listen for auth changes
+        supabaseClient.auth.onAuthStateChange(async (event, session) => {
+            if (event === 'SIGNED_IN') {
+                await this.handleUserLogin(session.user);
+            } else if (event === 'SIGNED_OUT') {
+                this.handleUserLogout();
+            }
+        });
     },
 
     setupListeners() {
@@ -252,18 +228,23 @@ const app = {
     // AUTHENTICATION LOGIC
     // =========================================
     showAuth() {
-        document.getElementById('auth-overlay').style.display = 'flex';
-        document.getElementById('app-main-container').style.display = 'none';
+        const overlay = document.getElementById('auth-overlay');
+        const container = document.getElementById('app-main-container');
+        if (overlay) overlay.style.display = 'flex';
+        if (container) container.style.display = 'none';
     },
 
     hideAuth() {
-        document.getElementById('auth-overlay').style.display = 'none';
-        document.getElementById('app-main-container').style.display = 'flex';
+        const overlay = document.getElementById('auth-overlay');
+        const container = document.getElementById('app-main-container');
+        if (overlay) overlay.style.display = 'none';
+        if (container) container.style.display = 'flex';
     },
 
     toggleAuthMode() {
         this.isLoginMode = !this.isLoginMode;
-        document.getElementById('group-fullname').style.display = this.isLoginMode ? 'none' : 'flex';
+        const grp = document.getElementById('group-fullname');
+        if (grp) grp.style.display = this.isLoginMode ? 'none' : 'flex';
         document.getElementById('btn-auth-submit').textContent = this.isLoginMode ? 'Login' : 'Daftar';
         document.getElementById('auth-subtitle').textContent = this.isLoginMode ? 'Login untuk mengakses dashboard Anda' : 'Buat akun baru untuk mulai membuat laporan';
         document.getElementById('auth-toggle-text').innerHTML = this.isLoginMode ?
@@ -347,6 +328,8 @@ const app = {
             document.getElementById('display-user-role').textContent = profile.role;
 
             // Show Admin Menu if admin
+            const navAdmin = document.getElementById('nav-admin');
+            const navReq = document.getElementById('nav-requests');
             if (profile.role === 'admin') {
                 document.getElementById('nav-admin').style.display = 'flex';
                 const navReq = document.getElementById('nav-requests');
@@ -363,11 +346,7 @@ const app = {
     },
 
     async logout() {
-        if (isSupabaseConfigured) {
-            await supabaseClient.auth.signOut();
-        } else {
-            UI.showToast('Fungsi logout dinonaktifkan di mode LocalStorage', 'warning');
-        }
+        await supabaseClient.auth.signOut();
     },
 
     handleUserLogout() {
@@ -414,23 +393,18 @@ const app = {
     // CRUD LOGIC WITH SUPABASE / FALLBACK
     // =========================================
     async loadReports() {
-        if (isSupabaseConfigured) {
-            try {
-                const { data, error } = await supabaseClient.from('reports')
-                    .select('*')
-                    .eq('user_id', this.user.id)
-                    .order('created_at', { ascending: false });
+        try {
+            const { data, error } = await supabaseClient.from('reports')
+                .select('*')
+                .eq('user_id', this.user.id)
+                .order('created_at', { ascending: false });
 
-                if (error) throw error;
-                this.reports = data || [];
-                this.renderDashboard();
-            } catch (error) {
-                UI.showToast('Gagal memuat laporan', 'error');
-                console.error(error);
-            }
-        } else {
-            this.reports = Storage.getReportsFallback();
+            if (error) throw error;
+            this.reports = data || [];
             this.renderDashboard();
+        } catch (error) {
+            UI.showToast('Gagal memuat laporan', 'error');
+            console.error(error);
         }
     },
 
@@ -581,33 +555,17 @@ const app = {
         if(submitBtn) submitBtn.disabled = true;
 
         try {
-            if (isSupabaseConfigured) {
-                if (data.id) {
-                    // Update
-                    const { error } = await supabaseClient.from('reports').update(data).eq('id', data.id);
-                    if (error) throw error;
-                    UI.showToast('Laporan berhasil diperbarui', 'success');
-                } else {
-                    // Insert
-                    delete data.id; // supabase auto generates UUID
-                    const { error } = await supabaseClient.from('reports').insert([data]);
-                    if (error) throw error;
-                    UI.showToast('Laporan baru berhasil disimpan', 'success');
-                }
+            if (data.id) {
+                // Update
+                const { error } = await supabaseClient.from('reports').update(data).eq('id', data.id);
+                if (error) throw error;
+                UI.showToast('Laporan berhasil diperbarui', 'success');
             } else {
-                // Fallback LocalStorage
-                if (data.id) {
-                    const index = this.reports.findIndex(r => r.id === data.id);
-                    if (index !== -1) {
-                        this.reports[index] = data;
-                        UI.showToast('Laporan berhasil diperbarui', 'success');
-                    }
-                } else {
-                    data.id = Utils.generateId();
-                    this.reports.unshift(data);
-                    UI.showToast('Laporan baru berhasil disimpan', 'success');
-                }
-                Storage.saveReportsFallback(this.reports);
+                // Insert
+                delete data.id; // supabase auto generates UUID
+                const { error } = await supabaseClient.from('reports').insert([data]);
+                if (error) throw error;
+                UI.showToast('Laporan baru berhasil disimpan', 'success');
             }
 
             Storage.clearDraft();
@@ -653,13 +611,8 @@ const app = {
     async deleteReport(id) {
         if (confirm('Apakah Anda yakin ingin menghapus laporan ini? Tindakan ini tidak dapat dibatalkan.')) {
             try {
-                if (isSupabaseConfigured) {
-                    const { error } = await supabaseClient.from('reports').delete().eq('id', id);
-                    if (error) throw error;
-                } else {
-                    this.reports = this.reports.filter(r => r.id !== id);
-                    Storage.saveReportsFallback(this.reports);
-                }
+                const { error } = await supabaseClient.from('reports').delete().eq('id', id);
+                if (error) throw error;
 
                 UI.showToast('Laporan berhasil dihapus', 'success');
                 await this.loadReports();
@@ -694,29 +647,37 @@ const app = {
         list.innerHTML = '';
 
         const filtered = this.reports.filter(report => {
-            const matchesSearch = report.nama.toLowerCase().includes(searchQuery) ||
-                                  Utils.formatMonth(report.periode).toLowerCase().includes(searchQuery);
-            const reportMonth = report.periode.split('-')[1];
+            const safeNama = (report.nama || '').toLowerCase();
+            const safePeriode = report.periode || '';
+            const matchesSearch = safeNama.includes(searchQuery) ||
+                                  Utils.formatMonth(safePeriode).toLowerCase().includes(searchQuery);
+            const reportMonth = safePeriode ? safePeriode.split('-')[1] : '';
             const matchesMonth = !filterMonth || reportMonth === filterMonth;
 
             return matchesSearch && matchesMonth;
         });
 
         if (filtered.length === 0) {
-            list.appendChild(emptyState);
-            emptyState.style.display = 'flex';
+            if (list) list.style.display = 'none';
+            if (emptyState) emptyState.style.display = 'flex';
         } else {
-            emptyState.style.display = 'none';
+            if (emptyState) emptyState.style.display = 'none';
+            if (list) list.style.display = 'grid'; // Maintain grid layout defined in CSS
             filtered.forEach((report, index) => {
                 const card = document.createElement('div');
                 card.className = 'report-card';
                 card.style.animationDelay = `${index * 0.05}s`;
+
+                const safeNamaDisplay = report.nama ? Utils.escapeHTML(report.nama.split(' ')[0]) : 'Tanpa Nama';
+                const safePeriodeDisplay = report.periode ? Utils.formatMonth(report.periode) : '-';
+                const safeRingkasan = report.ringkasan ? Utils.escapeHTML(report.ringkasan) : '';
+
                 card.innerHTML = `
                     <div class="report-header">
-                        <div class="report-title">Laporan ${Utils.escapeHTML(report.nama.split(' ')[0])}</div>
-                        <div class="report-period">${Utils.formatMonth(report.periode)}</div>
+                        <div class="report-title">Laporan ${safeNamaDisplay}</div>
+                        <div class="report-period">${safePeriodeDisplay}</div>
                     </div>
-                    <div class="report-summary">${Utils.escapeHTML(report.ringkasan)}</div>
+                    <div class="report-summary">${safeRingkasan}</div>
                     <div class="report-actions">
                         <button class="btn-icon" title="Edit" onclick="app.editReport('${report.id}')" aria-label="Edit Laporan">
                             <i class="ph ph-pencil-simple"></i>

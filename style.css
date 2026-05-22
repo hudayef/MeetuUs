@@ -2,7 +2,7 @@
    Modern SaaS Design System (2026 Style)
    ========================================= */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
 
 :root {
     /* Light Theme (Premium SaaS) */
@@ -92,7 +92,7 @@ html {
 }
 
 body {
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: 'Poppins', system-ui, -apple-system, sans-serif;
     background-color: var(--bg-base);
     color: var(--text-primary);
     line-height: 1.6;
