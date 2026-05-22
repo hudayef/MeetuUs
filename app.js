@@ -255,13 +255,12 @@ const app = {
     async handleAuth(e) {
         e.preventDefault();
 
-        const email = document.getElementById('auth-email').value;
-        const password = document.getElementById('auth-password').value;
-        const fullName = document.getElementById('auth-fullname').value || email.split('@')[0];
+        const emailEl = document.getElementById('auth-email');
+        const passwordEl = document.getElementById('auth-password');
+        const fullNameEl = document.getElementById('auth-fullname');
         const btn = document.getElementById('btn-auth-submit');
 
-        btn.disabled = true;
-        btn.textContent = 'Memproses...';
+        if (!emailEl || !passwordEl) return;
 
         if (!isSupabaseConfigured) {
             // Fallback Local Mode logic
@@ -276,10 +275,9 @@ const app = {
                 const navRequests = document.getElementById('nav-requests');
                 if(navRequests) navRequests.style.display = 'none';
 
-                await this.loadReports();
-                this.navigate('dashboard');
-            }, 800);
-            return;
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Memproses...';
         }
 
         try {
@@ -307,8 +305,10 @@ const app = {
             }
         } catch (error) {
             UI.showToast(error.message, 'error');
-            btn.disabled = false;
-            btn.textContent = this.isLoginMode ? 'Login' : 'Daftar';
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = this.isLoginMode ? 'Login' : 'Daftar';
+            }
         }
     },
 
