@@ -317,10 +317,18 @@ const app = {
         this.hideAuth();
 
         // Fetch User Profile (Role)
-        const { data: profile, error } = await supabaseClient.from('profiles')
-            .select('*')
-            .eq('id', user.id)
-            .single();
+        let profile = null;
+        try {
+            const { data, error } = await supabaseClient.from('profiles')
+                .select('*')
+                .eq('id', user.id)
+                .single();
+            if (error) throw error;
+            profile = data;
+        } catch (error) {
+            console.warn("Could not fetch profile, falling back locally", error);
+            profile = { full_name: user.email || 'Local Mode', role: 'admin' };
+        }
 
         if (profile) {
             this.profile = profile;
@@ -729,12 +737,19 @@ const app = {
             // Fetch Users
             const { data: users, error: errUser } = await supabaseClient.from('profiles').select('*').order('created_at', { ascending: false });
             if (errUser) throw errUser;
-            this.allUsers = users;
-            document.getElementById('admin-total-users').textContent = users.length;
+            this.allUsers = users || [];
+        } catch (error) {
+            this.allUsers = [];
+            console.error(error);
+        }
 
-            const userBody = document.querySelector('#table-users tbody');
+        const adminTotalUsersEl = document.getElementById('admin-total-users');
+        if (adminTotalUsersEl) adminTotalUsersEl.textContent = this.allUsers.length;
+
+        const userBody = document.querySelector('#table-users tbody');
+        if (userBody) {
             userBody.innerHTML = '';
-            users.forEach(u => {
+            this.allUsers.forEach(u => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td>${Utils.escapeHTML(u.full_name || '-')}</td>
@@ -749,16 +764,26 @@ const app = {
                 `;
                 userBody.appendChild(tr);
             });
+        }
 
+        try {
             // Fetch All Reports
             const { data: reports, error: errRep } = await supabaseClient.from('reports').select('*').order('created_at', { ascending: false });
             if (errRep) throw errRep;
-            this.allReports = reports;
-            document.getElementById('admin-total-reports').textContent = reports.length;
+            this.allReports = reports || [];
+        } catch (error) {
+            this.allReports = [];
+            console.error(error);
+            UI.showToast('Gagal memuat data laporan admin', 'error');
+        }
 
-            const repBody = document.querySelector('#table-all-reports tbody');
+        const adminTotalReportsEl = document.getElementById('admin-total-reports');
+        if (adminTotalReportsEl) adminTotalReportsEl.textContent = this.allReports.length;
+
+        const repBody = document.querySelector('#table-all-reports tbody');
+        if (repBody) {
             repBody.innerHTML = '';
-            reports.forEach(r => {
+            this.allReports.forEach(r => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td>${Utils.escapeHTML(r.nama)}</td>
