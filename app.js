@@ -283,6 +283,7 @@ const app = {
         }
 
         try {
+            if (!supabaseClient) throw new Error("Supabase SDK is not initialized");
             if (this.isLoginMode) {
                 const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
                 if (error) throw error;
@@ -377,13 +378,16 @@ const app = {
 
     navigate(view) {
         if (view === 'form') {
-            const isEdit = document.getElementById('report-id').value !== '';
+            const idEl = document.getElementById('report-id');
+            const isEdit = idEl ? idEl.value !== '' : false;
             if (!isEdit) {
                 this.loadDraft();
-                if(document.getElementById('table-target').querySelector('tbody').children.length === 0) {
+                const tableTarget = document.getElementById('table-target');
+                if(tableTarget && tableTarget.querySelector('tbody').children.length === 0) {
                      this.addTargetRow();
                 }
-                if(document.getElementById('table-kendala').querySelector('tbody').children.length === 0) {
+                const tableKendala = document.getElementById('table-kendala');
+                if(tableKendala && tableKendala.querySelector('tbody').children.length === 0) {
                      this.addKendalaRow();
                 }
             }
