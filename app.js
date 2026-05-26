@@ -209,7 +209,9 @@ const app = {
 
     setupListeners() {
         const form = document.getElementById('report-form');
-        form.addEventListener('input', this.debounce(() => this.autoSaveDraft(), 500));
+        if (form) {
+            form.addEventListener('input', this.debounce(() => this.autoSaveDraft(), 500));
+        }
     },
 
     debounce(func, wait) {
@@ -734,6 +736,7 @@ const app = {
         }
 
         try {
+            if (!supabaseClient) throw new Error("Supabase is not initialized");
             // Fetch Users
             const { data: users, error: errUser } = await supabaseClient.from('profiles').select('*').order('created_at', { ascending: false });
             if (errUser) throw errUser;
