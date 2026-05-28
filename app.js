@@ -225,6 +225,15 @@ const app = {
             this.showAuth();
             UI.showToast('Gagal terhubung ke server', 'error');
         }
+
+        // Listen for auth changes
+        supabaseClient.auth.onAuthStateChange(async (event, session) => {
+            if (event === 'SIGNED_IN') {
+                await this.handleUserLogin(session.user);
+            } else if (event === 'SIGNED_OUT') {
+                this.handleUserLogout();
+            }
+        });
     },
 
     setupListeners() {
@@ -753,12 +762,19 @@ const app = {
             // Fetch Users
             const { data: users, error: errUser } = await Utils.withTimeout(supabaseClient.from('profiles').select('*').order('created_at', { ascending: false }), 10000);
             if (errUser) throw errUser;
-            this.allUsers = users;
-            document.getElementById('admin-total-users').textContent = users.length;
+            this.allUsers = users || [];
+        } catch (error) {
+            this.allUsers = [];
+            console.error(error);
+        }
 
-            const userBody = document.querySelector('#table-users tbody');
+        const adminTotalUsersEl = document.getElementById('admin-total-users');
+        if (adminTotalUsersEl) adminTotalUsersEl.textContent = this.allUsers.length;
+
+        const userBody = document.querySelector('#table-users tbody');
+        if (userBody) {
             userBody.innerHTML = '';
-            users.forEach(u => {
+            this.allUsers.forEach(u => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td>${Utils.escapeHTML(u.full_name || '-')}</td>
@@ -773,16 +789,26 @@ const app = {
                 `;
                 userBody.appendChild(tr);
             });
+        }
 
+        try {
             // Fetch All Reports
             const { data: reports, error: errRep } = await Utils.withTimeout(supabaseClient.from('reports').select('*').order('created_at', { ascending: false }), 10000);
             if (errRep) throw errRep;
-            this.allReports = reports;
-            document.getElementById('admin-total-reports').textContent = reports.length;
+            this.allReports = reports || [];
+        } catch (error) {
+            this.allReports = [];
+            console.error(error);
+            UI.showToast('Gagal memuat data laporan admin', 'error');
+        }
 
-            const repBody = document.querySelector('#table-all-reports tbody');
+        const adminTotalReportsEl = document.getElementById('admin-total-reports');
+        if (adminTotalReportsEl) adminTotalReportsEl.textContent = this.allReports.length;
+
+        const repBody = document.querySelector('#table-all-reports tbody');
+        if (repBody) {
             repBody.innerHTML = '';
-            reports.forEach(r => {
+            this.allReports.forEach(r => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td>${Utils.escapeHTML(r.nama)}</td>
