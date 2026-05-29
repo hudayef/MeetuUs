@@ -10,9 +10,17 @@
 const SUPABASE_URL = 'https://qkrftwehwwzwxajuurpk.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_ELyphZsBinKDKyH6hD5ORg_YARPwtO7';
 
-
 // Initialize Supabase Client
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let supabaseClient = null;
+try {
+    if (window.supabase) {
+        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    } else {
+        console.warn("Supabase SDK is not loaded.");
+    }
+} catch (e) {
+    console.error("Supabase initialization error:", e);
+}
 
 const Storage = {
     THEME_KEY: 'cw_theme_v2',
@@ -45,6 +53,20 @@ const Storage = {
 };
 
 const Utils = {
+    withTimeout(promise, ms = 10000) {
+        return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => {
+                reject(new Error("Request timeout (terlalu lama)"));
+            }, ms);
+            promise.then(value => {
+                clearTimeout(timer);
+                resolve(value);
+            }).catch(reason => {
+                clearTimeout(timer);
+                reject(reason);
+            });
+        });
+    },
     generateId() {
         return 'rep_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
     },
@@ -139,23 +161,25 @@ const UI = {
         // Update nav links
         document.querySelectorAll('.sidebar-nav li').forEach(el => el.classList.remove('active'));
 
+        const pt = document.getElementById('page-title');
         if (view === 'dashboard') {
             const navDash = document.getElementById('nav-dashboard');
             if(navDash) navDash.classList.add('active');
-            document.getElementById('page-title').textContent = 'Dashboard';
+            if(pt) pt.textContent = 'Dashboard';
             const btnCreate = document.getElementById('btn-header-create');
             if(btnCreate) btnCreate.style.display = 'inline-flex';
         } else if (view === 'form') {
             const navCreate = document.getElementById('nav-create');
             if(navCreate) navCreate.classList.add('active');
-            const isEdit = document.getElementById('report-id').value !== '';
-            document.getElementById('page-title').textContent = isEdit ? 'Edit Laporan' : 'Buat Laporan Baru';
+            const rid = document.getElementById('report-id');
+            const isEdit = rid ? rid.value !== '' : false;
+            if(pt) pt.textContent = isEdit ? 'Edit Laporan' : 'Buat Laporan Baru';
             const btnCreate = document.getElementById('btn-header-create');
             if(btnCreate) btnCreate.style.display = 'none';
         } else if (view === 'admin') {
             const navAdmin = document.getElementById('nav-admin');
             if(navAdmin) navAdmin.classList.add('active');
-            document.getElementById('page-title').textContent = 'Admin Dashboard';
+            if(pt) pt.textContent = 'Admin Dashboard';
             const btnCreate = document.getElementById('btn-header-create');
             if(btnCreate) btnCreate.style.display = 'none';
         }
@@ -177,24 +201,29 @@ const app = {
         UI.setTheme(this.currentTheme);
         this.setupListeners();
 
-        // Check Auth Session
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        if (session) {
-            await this.handleUserLogin(session.user);
-        } else {
-            // Fallback Mode: Skip Auth, grant pseudo-admin
-            console.warn("Supabase not configured. Falling back to LocalStorage mode.");
-            this.hideAuth();
-            this.user = { id: 'local_user' };
-            this.profile = { full_name: 'Local User', role: 'admin' };
-            document.getElementById('display-user-name').textContent = 'Local Mode';
-            document.getElementById('display-user-role').textContent = 'admin';
-            document.getElementById('nav-admin').style.display = 'flex';
-            const navRequests = document.getElementById('nav-requests');
-            if(navRequests) navRequests.style.display = 'none';
+        try {
+            if (!supabaseClient) throw new Error("Supabase is not initialized.");
 
-            await this.loadReports();
-            this.navigate('dashboard');
+            // Check Auth Session
+            const { data: { session } } = await Utils.withTimeout(supabaseClient.auth.getSession(), 10000);
+            if (session) {
+                await this.handleUserLogin(session.user);
+            } else {
+                this.showAuth();
+            }
+
+            // Listen for auth changes
+            supabaseClient.auth.onAuthStateChange(async (event, session) => {
+                if (event === 'SIGNED_IN') {
+                    await this.handleUserLogin(session.user);
+                } else if (event === 'SIGNED_OUT') {
+                    this.handleUserLogout();
+                }
+            });
+        } catch (error) {
+            console.error("Supabase initialization error:", error);
+            this.showAuth();
+            UI.showToast('Gagal terhubung ke server', 'error');
         }
 
         // Listen for auth changes
@@ -290,15 +319,16 @@ const app = {
         try {
             if (!supabaseClient) throw new Error("Supabase SDK is not initialized");
             if (this.isLoginMode) {
-                const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+                const { data, error } = await Utils.withTimeout(supabaseClient.auth.signInWithPassword({ email, password }), 15000);
                 if (error) throw error;
                 UI.showToast('Login berhasil', 'success');
+                // handleUserLogin will be called by onAuthStateChange
             } else {
-                const { data, error } = await supabaseClient.auth.signUp({
+                const { data, error } = await Utils.withTimeout(supabaseClient.auth.signUp({
                     email,
                     password,
                     options: { data: { full_name: fullName } }
-                });
+                }), 15000);
                 if (error) throw error;
 
                 if (data?.user?.identities?.length === 0) {
@@ -309,7 +339,12 @@ const app = {
                 }
 
                 UI.showToast('Pendaftaran berhasil. Silakan login.', 'success');
-                if(!data.session) this.toggleAuthMode(); // Wait for email confirmation if enabled
+                if(!data.session) {
+                    this.toggleAuthMode(); // Wait for email confirmation if enabled
+                    btn.disabled = false;
+                    btn.textContent = 'Login';
+                }
+                // If data.session exists, handleUserLogin will be called by onAuthStateChange
             }
         } catch (error) {
             UI.showToast(error.message, 'error');
@@ -331,7 +366,6 @@ const app = {
                 .select('*')
                 .eq('id', user.id)
                 .single();
-            if (error) throw error;
             profile = data;
         } catch (error) {
             console.warn("Could not fetch profile, falling back locally", error);
@@ -347,12 +381,10 @@ const app = {
             const navAdmin = document.getElementById('nav-admin');
             const navReq = document.getElementById('nav-requests');
             if (profile.role === 'admin') {
-                document.getElementById('nav-admin').style.display = 'flex';
-                const navReq = document.getElementById('nav-requests');
+                if (navAdmin) navAdmin.style.display = 'flex';
                 if (navReq) navReq.style.display = 'none';
             } else {
-                document.getElementById('nav-admin').style.display = 'none';
-                const navReq = document.getElementById('nav-requests');
+                if (navAdmin) navAdmin.style.display = 'none';
                 if (navReq) navReq.style.display = 'flex';
             }
         }
@@ -362,7 +394,11 @@ const app = {
     },
 
     async logout() {
-        await supabaseClient.auth.signOut();
+        try {
+            if (supabaseClient) await supabaseClient.auth.signOut();
+        } catch (error) {
+            console.error("Logout error", error);
+        }
     },
 
     handleUserLogout() {
@@ -413,15 +449,22 @@ const app = {
     // =========================================
     async loadReports() {
         try {
-            const { data, error } = await supabaseClient.from('reports')
+            if (!this.user || !this.user.id || !supabaseClient) {
+                 this.reports = [];
+                 this.renderDashboard();
+                 return;
+            }
+            const { data, error } = await Utils.withTimeout(supabaseClient.from('reports')
                 .select('*')
                 .eq('user_id', this.user.id)
-                .order('created_at', { ascending: false });
+                .order('created_at', { ascending: false }), 10000);
 
             if (error) throw error;
             this.reports = data || [];
             this.renderDashboard();
         } catch (error) {
+            this.reports = [];
+            this.renderDashboard();
             UI.showToast('Gagal memuat laporan', 'error');
             console.error(error);
         }
@@ -541,10 +584,14 @@ const app = {
     },
 
     resetForm() {
-        document.getElementById('report-form').reset();
-        document.getElementById('report-id').value = '';
-        document.querySelector('#table-target tbody').innerHTML = '';
-        document.querySelector('#table-kendala tbody').innerHTML = '';
+        const rf = document.getElementById('report-form');
+        if(rf) rf.reset();
+        const ri = document.getElementById('report-id');
+        if(ri) ri.value = '';
+        const tbTarget = document.querySelector('#table-target tbody');
+        if(tbTarget) tbTarget.innerHTML = '';
+        const tbKendala = document.querySelector('#table-kendala tbody');
+        if(tbKendala) tbKendala.innerHTML = '';
         this.addTargetRow();
         this.addKendalaRow();
     },
@@ -574,6 +621,8 @@ const app = {
         if(submitBtn) submitBtn.disabled = true;
 
         try {
+            if (!supabaseClient) throw new Error("Supabase is not initialized");
+
             if (data.id) {
                 // Update
                 const { error } = await supabaseClient.from('reports').update(data).eq('id', data.id);
@@ -620,16 +669,19 @@ const app = {
         document.getElementById('detail-report-kelebihan').textContent = report.eval_kelebihan || '-';
         document.getElementById('detail-report-peningkatan').textContent = report.eval_peningkatan || '-';
 
-        document.getElementById('report-detail-modal').style.display = 'flex';
+        const modal = document.getElementById('report-detail-modal');
+        if (modal) modal.style.display = 'flex';
     },
 
     closeReportDetailModal() {
-        document.getElementById('report-detail-modal').style.display = 'none';
+        const modal = document.getElementById('report-detail-modal');
+        if (modal) modal.style.display = 'none';
     },
 
     async deleteReport(id) {
         if (confirm('Apakah Anda yakin ingin menghapus laporan ini? Tindakan ini tidak dapat dibatalkan.')) {
             try {
+                if (!supabaseClient) throw new Error("Supabase is not initialized");
                 const { error } = await supabaseClient.from('reports').delete().eq('id', id);
                 if (error) throw error;
 
@@ -719,35 +771,10 @@ const app = {
     },
 
     async loadAdminData() {
-        if (!isSupabaseConfigured) {
-            // Mock data for fallback mode
-            document.getElementById('admin-total-users').textContent = "1";
-            const userBody = document.querySelector('#table-users tbody');
-            userBody.innerHTML = `<tr><td>Local User</td><td>local@example.com</td><td><span style="padding: 4px 8px; border-radius: 4px; background: var(--primary-light); color: var(--primary-color); font-size: 0.8rem; font-weight: 600;">admin</span></td><td>-</td></tr>`;
-
-            document.getElementById('admin-total-reports').textContent = this.reports.length;
-            this.allReports = this.reports;
-            const repBody = document.querySelector('#table-all-reports tbody');
-            repBody.innerHTML = '';
-            this.reports.forEach(r => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${Utils.escapeHTML(r.nama)}</td>
-                    <td>${Utils.formatMonth(r.periode)}</td>
-                    <td><div style="max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${Utils.escapeHTML(r.ringkasan)}</div></td>
-                    <td class="action-col">
-                         <button class="btn-icon" style="display:inline-flex; padding: 4px;" title="Lihat Detail" onclick="app.viewReportDetail('${r.id}')"><i class="ph ph-eye"></i></button>
-                    </td>
-                `;
-                repBody.appendChild(tr);
-            });
-            return;
-        }
-
         try {
             if (!supabaseClient) throw new Error("Supabase is not initialized");
             // Fetch Users
-            const { data: users, error: errUser } = await supabaseClient.from('profiles').select('*').order('created_at', { ascending: false });
+            const { data: users, error: errUser } = await Utils.withTimeout(supabaseClient.from('profiles').select('*').order('created_at', { ascending: false }), 10000);
             if (errUser) throw errUser;
             this.allUsers = users || [];
         } catch (error) {
@@ -780,7 +807,7 @@ const app = {
 
         try {
             // Fetch All Reports
-            const { data: reports, error: errRep } = await supabaseClient.from('reports').select('*').order('created_at', { ascending: false });
+            const { data: reports, error: errRep } = await Utils.withTimeout(supabaseClient.from('reports').select('*').order('created_at', { ascending: false }), 10000);
             if (errRep) throw errRep;
             this.allReports = reports || [];
         } catch (error) {
@@ -809,6 +836,8 @@ const app = {
             });
 
         } catch (error) {
+            this.allUsers = [];
+            this.allReports = [];
             console.error(error);
             UI.showToast('Gagal memuat data admin', 'error');
         }
@@ -961,34 +990,17 @@ Object.assign(app, {
         };
 
         try {
-            if (!isSupabaseConfigured) {
-                // Fallback local storage
-                let requests = JSON.parse(localStorage.getItem('cw_requests') || '[]');
-                if (id) {
-                    const idx = requests.findIndex(r => r.id === id);
-                    if (idx > -1) {
-                        requests[idx] = { ...requests[idx], ...newRequest, updated_at: new Date().toISOString() };
-                    }
-                } else {
-                    requests.push({
-                        id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2),
-                        ...newRequest,
-                        created_by: 'local',
-                        created_at: new Date().toISOString()
-                    });
-                }
-                localStorage.setItem('cw_requests', JSON.stringify(requests));
-                UI.showToast('Request berhasil disimpan (Local)', 'success');
+            if (!supabaseClient) throw new Error("Supabase is not initialized");
+
+            if (id) {
+                const { error } = await supabaseClient.from('requests').update(newRequest).eq('id', id);
+                if (error) throw error;
             } else {
-                if (id) {
-                    const { error } = await supabaseClient.from('requests').update(newRequest).eq('id', id);
-                    if (error) throw error;
-                } else {
-                    const { error } = await supabaseClient.from('requests').insert([newRequest]);
-                    if (error) throw error;
-                }
-                UI.showToast('Request berhasil disimpan', 'success');
+                const { error } = await supabaseClient.from('requests').insert([newRequest]);
+                if (error) throw error;
             }
+            UI.showToast('Request berhasil disimpan', 'success');
+
             form.reset();
             if(document.getElementById('req-id')) {
                 document.getElementById('req-id').value = '';
@@ -1010,12 +1022,8 @@ Object.assign(app, {
     },
 
     async loadAdminRequests() {
-        if (!isSupabaseConfigured) {
-             const requests = JSON.parse(localStorage.getItem('cw_requests') || '[]');
-             this.renderAdminRequests(requests);
-             return;
-        }
         try {
+            if (!supabaseClient) throw new Error("Supabase is not initialized");
             const { data, error } = await supabaseClient.from('requests').select('*').order('created_at', { ascending: false });
             if (error) throw error;
             this.renderAdminRequests(data);
@@ -1058,12 +1066,8 @@ Object.assign(app, {
     },
 
     async loadRequests() {
-        if (!isSupabaseConfigured) {
-            const requests = JSON.parse(localStorage.getItem('cw_requests') || '[]');
-            this.renderRequests(requests);
-            return;
-        }
         try {
+            if (!supabaseClient) throw new Error("Supabase is not initialized");
             const { data, error } = await supabaseClient.from('requests').select('*').order('created_at', { ascending: false });
             if (error) throw error;
             this.renderRequests(data);
@@ -1103,14 +1107,10 @@ Object.assign(app, {
     },
 
     async openRequestModal(id, isAdminView = false) {
+        if (!supabaseClient) return;
         let req;
-        if (!isSupabaseConfigured) {
-             const requests = JSON.parse(localStorage.getItem('cw_requests') || '[]');
-             req = requests.find(r => r.id === id);
-        } else {
-             const { data } = await supabaseClient.from('requests').select('*').eq('id', id).single();
-             req = data;
-        }
+        const { data } = await supabaseClient.from('requests').select('*').eq('id', id).single();
+        req = data;
 
         if(!req) return;
 
@@ -1121,41 +1121,41 @@ Object.assign(app, {
 
         // Removed status logic from modal since it isn't defined in the HTML structure
         const actionArea = document.getElementById('modal-req-actions');
-
-        if (isAdminView) {
-            actionArea.style.display = 'none'; // Admins don't accept/reject their own requests in this view
-        } else {
-            actionArea.style.display = req.status === 'Pending' ? 'flex' : 'none';
-            if (req.status === 'Pending') {
+        if (actionArea) {
+            if (isAdminView) {
+                actionArea.style.display = 'none'; // Admins don't accept/reject their own requests in this view
+            } else {
+                actionArea.style.display = req.status === 'Pending' ? 'flex' : 'none';
+                if (req.status === 'Pending') {
                 actionArea.innerHTML = `
                     <button class="btn-secondary" style="color: var(--error-color); border-color: var(--error-color);" onclick="app.updateRequestStatus('${req.id}', 'Rejected')">Tolak Tugas</button>
                     <button class="btn-primary" onclick="app.updateRequestStatus('${req.id}', 'Accepted')">Terima Tugas</button>
                 `;
+                }
             }
         }
 
-        document.getElementById('request-modal').classList.add('active');
-        document.getElementById('request-modal').style.display = 'flex';
+        const modal = document.getElementById('request-modal');
+        if (modal) {
+            modal.classList.add('active');
+            modal.style.display = 'flex';
+        }
     },
 
     closeRequestModal() {
-        document.getElementById('request-modal').classList.remove('active');
-        document.getElementById('request-modal').style.display = 'none';
+        const modal = document.getElementById('request-modal');
+        if (modal) {
+            modal.classList.remove('active');
+            modal.style.display = 'none';
+        }
     },
 
     async updateRequestStatus(id, newStatus) {
         try {
-            if (!isSupabaseConfigured) {
-                let requests = JSON.parse(localStorage.getItem('cw_requests') || '[]');
-                const idx = requests.findIndex(r => r.id === id);
-                if (idx > -1) {
-                    requests[idx].status = newStatus;
-                    localStorage.setItem('cw_requests', JSON.stringify(requests));
-                }
-            } else {
-                const { error } = await supabaseClient.from('requests').update({ status: newStatus }).eq('id', id);
-                if (error) throw error;
-            }
+            if (!supabaseClient) throw new Error("Supabase is not initialized");
+            const { error } = await supabaseClient.from('requests').update({ status: newStatus }).eq('id', id);
+            if (error) throw error;
+
             UI.showToast(`Request ${newStatus === 'Accepted' ? 'diterima' : 'ditolak'}`, 'success');
             this.closeRequestModal();
             this.loadRequests(); // Update writer view
@@ -1167,14 +1167,10 @@ Object.assign(app, {
     async deleteRequest(id) {
         if (!confirm('Hapus request ini?')) return;
         try {
-            if (!isSupabaseConfigured) {
-                let requests = JSON.parse(localStorage.getItem('cw_requests') || '[]');
-                requests = requests.filter(r => r.id !== id);
-                localStorage.setItem('cw_requests', JSON.stringify(requests));
-            } else {
-                const { error } = await supabaseClient.from('requests').delete().eq('id', id);
-                if (error) throw error;
-            }
+            if (!supabaseClient) throw new Error("Supabase is not initialized");
+            const { error } = await supabaseClient.from('requests').delete().eq('id', id);
+            if (error) throw error;
+
             UI.showToast('Request dihapus', 'success');
             this.loadAdminRequests();
         } catch(error) {
