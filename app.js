@@ -276,6 +276,11 @@ const app = {
                 document.getElementById('nav-admin').style.display = 'flex';
                 const navRequests = document.getElementById('nav-requests');
                 if(navRequests) navRequests.style.display = 'none';
+                await this.loadReports();
+                this.navigate('dashboard');
+            }, 100);
+            return;
+        }
 
         if (btn) {
             btn.disabled = true;
