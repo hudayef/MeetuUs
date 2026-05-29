@@ -2,13 +2,16 @@
  * Laporan Bulanan Content Writer
  * Main Application Logic - Modular & Optimized with Supabase
  */
-
+  
 // =========================================
 // SUPABASE CONFIGURATION
 // =========================================
 // GANTI VALUE DI BAWAH INI DENGAN PROJECT URL & ANON KEY DARI SUPABASE ANDA
 const SUPABASE_URL = 'https://qkrftwehwwzwxajuurpk.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_ELyphZsBinKDKyH6hD5ORg_YARPwtO7';
+
+// FIX #2: Declare isSupabaseConfigured
+const isSupabaseConfigured = !!(SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase);
 
 // Initialize Supabase Client
 let supabaseClient = null;
@@ -226,14 +229,7 @@ const app = {
             UI.showToast('Gagal terhubung ke server', 'error');
         }
 
-        // Listen for auth changes
-        supabaseClient.auth.onAuthStateChange(async (event, session) => {
-            if (event === 'SIGNED_IN') {
-                await this.handleUserLogin(session.user);
-            } else if (event === 'SIGNED_OUT') {
-                this.handleUserLogout();
-            }
-        });
+        // FIX #3: Removed duplicate listener (was causing double callbacks)
     },
 
     setupListeners() {
@@ -293,13 +289,23 @@ const app = {
 
         if (!emailEl || !passwordEl) return;
 
+        // FIX #1: Extract nilai dari DOM elements SEBELUM menggunakannya
+        const email = emailEl.value.trim();
+        const password = passwordEl.value.trim();
+        const fullName = fullNameEl ? fullNameEl.value.trim() : 'User';
+
+        if (!email || !password) {
+            UI.showToast('Email dan password harus diisi', 'error');
+            return;
+        }
+
         if (!isSupabaseConfigured) {
             // Fallback Local Mode logic
             setTimeout(async () => {
                 UI.showToast(this.isLoginMode ? 'Login Local berhasil' : 'Pendaftaran Local berhasil', 'success');
                 this.hideAuth();
                 this.user = { id: 'local_user_' + Date.now() };
-                this.profile = { full_name: fullName, role: 'admin' };
+                this.profile = { id: this.user.id, full_name: fullName, email: email, role: 'admin' };
                 document.getElementById('display-user-name').textContent = fullName;
                 document.getElementById('display-user-role').textContent = 'admin';
                 document.getElementById('nav-admin').style.display = 'flex';
