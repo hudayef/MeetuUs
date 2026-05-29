@@ -834,12 +834,6 @@ const app = {
                 `;
                 repBody.appendChild(tr);
             });
-
-        } catch (error) {
-            this.allUsers = [];
-            this.allReports = [];
-            console.error(error);
-            UI.showToast('Gagal memuat data admin', 'error');
         }
     },
 
